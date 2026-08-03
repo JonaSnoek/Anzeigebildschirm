@@ -143,9 +143,15 @@
               <input type="range" class="slider" id="weather_big_size_pct" name="weather_big_size_pct" min="30" max="600" step="5" value="{{ settings.weather_big_size_pct }}">
               <span class="slider-value" id="weather_big_size_pct_val">{{ settings.weather_big_size_pct }}%</span>
             </div>
+
+            <div class="checkbox-line">
+              <input type="checkbox" id="weather_interstitial" name="weather_interstitial" {{ 'checked' if settings.weather_interstitial == 'true' }}>
+              <label for="weather_interstitial">Große Wetter-Ansicht zwischen den Medien zeigen</label>
+            </div>
             <div class="hint">
-              Ohne Medien wird das Wetter groß mittig angezeigt (Größe große
-              Ansicht); bei Medien gilt „Größe (bei Medien)“ für das Widget.
+              Wird als eigener Zeitpunkt zwischen den Medien eingeblendet –
+              immer einzeln, nie zusammen mit der großen Uhr. Bei Medien gilt
+              „Größe (bei Medien)“ für das Wetter-Widget.
             </div>
 
             <div class="segmented" id="weather_mode_seg">

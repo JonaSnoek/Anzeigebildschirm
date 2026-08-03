@@ -11,8 +11,9 @@ Alle verbundenen Anzeigen leiten daraus denselben aktuellen Inhalt ab –
 unabhängig davon, wann sie geöffnet wurden. Der Server gibt die Reihenfolge
 und die Anzeigedauer zentral vor.
 
-Element-Typen: "image", "video" und "clock" (Uhr-Ansicht zwischen den
-Medien, sofern clock_interstitial aktiv ist).
+Element-Typen: "image", "video", "clock" (Uhr-Ansicht zwischen den Medien,
+sofern clock_interstitial aktiv ist) und "weather" (eigene große Wetter-Ansicht,
+sofern weather_interstitial aktiv ist).
 """
 
 import time
@@ -58,10 +59,25 @@ def _timeline_slots(items, settings: dict):
     """
     slide = int(settings.get("slide_duration", "8") or 8)
     loop = settings.get("loop", "true") != "false"
-    interstitial = (
+    clock_on = (
         settings.get("clock_interstitial", "false") == "true"
         and settings.get("clock_enabled", "true") != "false"
     )
+    weather_on = (
+        settings.get("weather_interstitial", "false") == "true"
+        and settings.get("weather_enabled", "true") != "false"
+    )
+
+    def interstitial_slots():
+        """Uhr- und Wetter-Zwischenansicht – einzeln, nie zusammen groß."""
+        out = []
+        if clock_on:
+            out.append({"type": "clock", "id": None, "name": "", "url": "",
+                        "duration": float(slide)})
+        if weather_on:
+            out.append({"type": "weather", "id": None, "name": "", "url": "",
+                        "duration": float(slide)})
+        return out
 
     slots = []
     for item in items:
@@ -72,18 +88,17 @@ def _timeline_slots(items, settings: dict):
             "url": f"/media/{item.type}/{item.stored_name}",
             "duration": _item_duration(item, slide),
         })
-        if interstitial and len(items) > 1:
-            slots.append({"type": "clock", "id": None, "name": "", "url": "",
-                          "duration": float(slide)})
+        if (clock_on or weather_on) and len(items) > 1:
+            slots.extend(interstitial_slots())
 
     # Ein einzelnes Medium wiederholt sich ohne Zwischenansicht.
-    if interstitial and len(items) == 1 and loop:
-        slots.append({"type": "clock", "id": None, "name": "", "url": "",
-                      "duration": float(slide)})
+    if (clock_on or weather_on) and len(items) == 1 and loop:
+        slots.extend(interstitial_slots())
 
     # Ohne Loop endet der Zyklus sauber beim letzten Medium.
-    if interstitial and not loop and slots and slots[-1]["type"] == "clock":
-        slots.pop()
+    if not loop:
+        while slots and slots[-1]["type"] in ("clock", "weather"):
+            slots.pop()
 
     cursor = 0.0
     for index, slot in enumerate(slots):
@@ -105,6 +120,8 @@ def _signature(items, settings: dict) -> str:
         str(settings.get("loop", "true")),
         str(settings.get("clock_interstitial", "false")),
         str(settings.get("clock_enabled", "true")),
+        str(settings.get("weather_interstitial", "false")),
+        str(settings.get("weather_enabled", "true")),
     ])
 
 

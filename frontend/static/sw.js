@@ -12,7 +12,7 @@
 
 "use strict";
 
-const VERSION = "v6";
+const VERSION = "v7";
 const CACHE = "anzeige-" + VERSION;
 
 const PRECACHE = [

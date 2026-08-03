@@ -42,6 +42,7 @@ ALLOWED = {
     "weather_y": ("int", 0, 100),
     "weather_size_pct": ("int", 30, 600),
     "weather_big_size_pct": ("int", 30, 600),
+    "weather_interstitial": ("bool",),
 }
 
 

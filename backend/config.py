@@ -97,7 +97,8 @@ class Config:
         "weather_x": "50",              # 0–100 (% horizontale Position, nur custom)
         "weather_y": "50",              # 0–100 (% vertikale Position, nur custom)
         "weather_size_pct": "100",      # 30–600 (% Skalierung des Wetter-Widgets bei Medien)
-        "weather_big_size_pct": "100",  # 30–600 (% Skalierung der großen Wetter-Ansicht ohne Medien)
+        "weather_big_size_pct": "100",  # 30–600 (% Skalierung der großen Wetter-Ansicht)
+        "weather_interstitial": "false", # große Wetter-Ansicht zwischen den Medien einblenden
     }
 
     # ---- Wetter -------------------------------------------------------------

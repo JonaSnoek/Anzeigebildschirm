@@ -353,6 +353,7 @@ if (settingsForm) {
       weather_y: parseInt(settingsForm.weather_y.value, 10),
       weather_size_pct: parseInt(settingsForm.weather_size_pct.value, 10),
       weather_big_size_pct: parseInt(settingsForm.weather_big_size_pct.value, 10),
+      weather_interstitial: settingsForm.weather_interstitial.checked,
     };
     try {
       await api("/api/settings", { method: "POST", body });
@@ -435,11 +436,18 @@ if (settingsForm) {
     });
   }
 
-  function previewIdle() {
-    // Große Ansicht: "Ohne Medien"-Modus oder aktueller Timeline-Slot ist
-    // eine Uhr-Ansicht (Interstitial) – exakt wie auf dem echten Display.
-    return previewContext.value === "empty"
-      || (previewContext.value === "media" && liveSlotState && liveSlotState.type === "clock");
+  // Darstellungszustand der Vorschau – exakt wie auf dem echten Display:
+  //   "empty"   → große Uhr (Ohne-Medien-Modus oder Uhr-Interstitial-Slot)
+  //   "weather" → große Wetter-Ansicht (Wetter-Interstitial-Slot)
+  //   "media"   → Medien mit kleinen Widgets
+  function previewMode() {
+    if (previewContext.value === "empty") return "empty";
+    if (previewContext.value === "media") {
+      if (liveSlotState && liveSlotState.type === "clock") return "empty";
+      if (liveSlotState && liveSlotState.type === "weather") return "weather";
+      return "media";
+    }
+    return "media";
   }
 
   function renderPreview() {
@@ -448,19 +456,22 @@ if (settingsForm) {
     const lang = previewLang();
     const clock = widgetCfg("clock");
     const weather = widgetCfg("weather");
-    const idle = previewIdle();
+    const mode = previewMode();
+    const idle = mode === "empty";
 
-    // Große Uhr-Ansicht (ohne Medien / Interstitial)
+    // Große Uhr-Ansicht nur im Zustand "empty" (Uhr-Slot) – getrennt vom Wetter.
     previewClockScreen.classList.toggle("hidden", !idle);
     previewClockScreen.classList.toggle("no-clock", !clock.enabled);
-    previewClockBlock.style.setProperty("--widget-scale", clock.bigSizePct / 100);
-    previewClockBlock.classList.toggle("clock-custom", clock.mode === "custom");
-    if (clock.mode === "custom") {
-      previewClockBlock.style.left = clock.x + "%";
-      previewClockBlock.style.top = clock.y + "%";
-    } else {
-      previewClockBlock.style.left = "";
-      previewClockBlock.style.top = "";
+    if (idle) {
+      previewClockBlock.style.setProperty("--widget-scale", clock.bigSizePct / 100);
+      previewClockBlock.classList.toggle("clock-custom", clock.mode === "custom");
+      if (clock.mode === "custom") {
+        previewClockBlock.style.left = clock.x + "%";
+        previewClockBlock.style.top = clock.y + "%";
+      } else {
+        previewClockBlock.style.left = "";
+        previewClockBlock.style.top = "";
+      }
     }
 
     // Uhr-Widget (Overlay während der Medien)
@@ -473,18 +484,21 @@ if (settingsForm) {
       previewClock.style.left = "";
       previewClock.style.top = "";
     }
-    previewClock.classList.toggle("hidden", idle || !clock.enabled);
+    previewClock.classList.toggle("hidden", mode !== "media" || !clock.enabled);
 
-    // Wetter: groß (Leerzustand) oder als Widget (während der Medien)
+    // Wetter: groß (Wetter-Interstitial) oder als Widget (während der Medien).
+    // Im Zustand "empty" (große Uhr) ist das Wetter ausgeblendet.
     const display = ["small", "medium", "large"].indexOf(settingsForm.weather_display.value) >= 0
       ? settingsForm.weather_display.value
       : "large";
-    if (idle) {
+    if (mode === "weather") {
       previewWeather.style.setProperty("--widget-scale", weather.bigSizePct / 100);
       previewWeather.className = "widget-weather embedded weather-screen";
       previewWeather.style.left = "";
       previewWeather.style.top = "";
-    } else {
+      previewWeather.classList.toggle("hidden", !weather.enabled);
+      previewWeather.innerHTML = Signage.weatherMarkup(weatherPreviewData(), "large", lang);
+    } else if (mode === "media") {
       previewWeather.style.setProperty("--widget-scale", weather.sizePct / 100);
       previewWeather.className = "widget-weather embedded weather-" + display + " weather-" + weather.mode;
       if (weather.mode === "custom") {
@@ -494,9 +508,14 @@ if (settingsForm) {
         previewWeather.style.left = "";
         previewWeather.style.top = "";
       }
+      previewWeather.classList.toggle("hidden", !weather.enabled);
+      previewWeather.innerHTML = Signage.weatherMarkup(weatherPreviewData(), display, lang);
+    } else {
+      previewWeather.classList.add("hidden");
+      previewWeather.innerHTML = "";
+      previewWeather.style.left = "";
+      previewWeather.style.top = "";
     }
-    previewWeather.classList.toggle("hidden", !weather.enabled);
-    previewWeather.innerHTML = Signage.weatherMarkup(weatherPreviewData(), idle ? "large" : display, lang);
 
     updatePreviewClock();
     updateLiveMedia();
@@ -528,8 +547,7 @@ if (settingsForm) {
   function updateLiveMedia() {
     if (!previewMedia) return;
     const slot = previewContext.value === "media" ? liveSlotState : null;
-    const idle = previewIdle();
-    if (!slot || idle) {
+    if (!slot || previewMode() !== "media") {
       previewMedia.innerHTML = "";
       liveMediaKey = null;
       return;
@@ -653,10 +671,11 @@ if (settingsForm) {
     const big = e.target.closest("#preview-clock-screen .clock-screen-block");
     const overlay = e.target.closest("#preview-clock");
     const weather = e.target.closest("#preview-weather");
-    const idle = previewIdle();
+    const mode = previewMode();
+    const idle = mode === "empty";
     if (big && idle) beginDrag(e, "clock", big);
-    else if (overlay && !idle) beginDrag(e, "clock", overlay);
-    else if (weather && !idle) beginDrag(e, "weather", weather);
+    else if (overlay && mode === "media") beginDrag(e, "clock", overlay);
+    else if (weather && mode === "media") beginDrag(e, "weather", weather);
   });
   window.addEventListener("pointermove", moveDrag);
   window.addEventListener("pointerup", () => endDrag());

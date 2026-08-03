@@ -44,7 +44,7 @@
   // Serverzeit - lokale Zeit (Sekunden), wird bei jedem Event korrigiert.
   let skew = 0;
 
-  let currentKey = null;   // "idle" | "image:<id>" | "video:<id>"
+  let currentKey = null;   // "idle" | "weather-screen" | "image:<id>" | "video:<id>"
   let currentLayer = LAYER_A;
   let currentAudioUrl = null;
   let source = null;
@@ -100,16 +100,21 @@
   function applyClock() {
     const c = cfg();
 
+    // Große Uhr-Ansicht nur im Leerzustand (eigener Slot – getrennt vom Wetter).
+    const bigClock = currentKey === "idle";
+    CLOCK_SCREEN.classList.toggle("hidden", !bigClock);
     CLOCK_SCREEN.classList.toggle("no-clock", !c.clockEnabled);
-    CLOCK_BLOCK.style.setProperty("--widget-scale", c.clockBigSizePct);
-    if (c.clockMode === "custom") {
-      CLOCK_BLOCK.classList.add("clock-custom");
-      CLOCK_BLOCK.style.left = c.clockX + "%";
-      CLOCK_BLOCK.style.top = c.clockY + "%";
-    } else {
-      CLOCK_BLOCK.classList.remove("clock-custom");
-      CLOCK_BLOCK.style.left = "";
-      CLOCK_BLOCK.style.top = "";
+    if (bigClock) {
+      CLOCK_BLOCK.style.setProperty("--widget-scale", c.clockBigSizePct);
+      if (c.clockMode === "custom") {
+        CLOCK_BLOCK.classList.add("clock-custom");
+        CLOCK_BLOCK.style.left = c.clockX + "%";
+        CLOCK_BLOCK.style.top = c.clockY + "%";
+      } else {
+        CLOCK_BLOCK.classList.remove("clock-custom");
+        CLOCK_BLOCK.style.left = "";
+        CLOCK_BLOCK.style.top = "";
+      }
     }
 
     CLOCK_WIDGET.classList.remove("hidden");
@@ -124,23 +129,24 @@
       CLOCK_WIDGET.style.top = "";
     }
     // Uhr-Overlay nur während der Medienwiedergabe zeigen.
-    const showingMedia = currentKey !== "idle";
+    const showingMedia = currentKey !== "idle" && currentKey !== "weather-screen";
     if (!c.clockEnabled || !showingMedia) CLOCK_WIDGET.classList.add("hidden");
   }
 
   /* ---------- Wetter ---------- */
-  // Zwei Darstellungen: groß (Leerzustand/Interstitial, bildschirmfüllend,
-  // mittig) und als Widget (während der Medien, frei positionierbar).
+  // Drei Zustände: groß (eigener Wetter-Slot, bildschirmfüllend), als Widget
+  // (während der Medien, frei positionierbar) oder ausgeblendet (Leerzustand).
   function applyWeather() {
     const c = cfg();
-    const idle = currentKey === "idle";
+    const bigWeather = currentKey === "weather-screen";
+    const media = currentKey !== "idle" && currentKey !== "weather-screen";
 
-    if (idle) {
+    if (bigWeather) {
       WEATHER.className = "widget-weather weather-screen";
       WEATHER.style.left = "";
       WEATHER.style.top = "";
       WEATHER.style.setProperty("--widget-scale", c.weatherBigSizePct);
-    } else {
+    } else if (media) {
       WEATHER.className = "widget-weather weather-" + c.weatherDisplay;
       WEATHER.style.setProperty("--widget-scale", c.weatherSizePct);
       if (c.weatherMode === "custom") {
@@ -152,6 +158,11 @@
         WEATHER.style.left = "";
         WEATHER.style.top = "";
       }
+    } else {
+      // Leerzustand: die große Uhr übernimmt den Bildschirm – Wetter einzeln.
+      WEATHER.classList.add("hidden");
+      WEATHER.innerHTML = "";
+      return;
     }
 
     if (!c.weatherEnabled || !state.weather || !state.weather.location) {
@@ -160,8 +171,8 @@
       return;
     }
     WEATHER.classList.remove("hidden");
-    // Große Ansicht zeigt immer die volle Darstellung (inkl. Tagesverlauf).
-    const display = idle ? "large" : c.weatherDisplay;
+    // Große Wetter-Ansicht zeigt immer die volle Darstellung (inkl. Tagesverlauf).
+    const display = bigWeather ? "large" : c.weatherDisplay;
     WEATHER.innerHTML = Signage.weatherMarkup(state.weather, display, lang);
   }
 
@@ -267,7 +278,16 @@
     currentKey = "idle";
     stopPlayer();
     PLAYER.classList.add("hidden");
-    CLOCK_SCREEN.classList.remove("hidden");
+    applyClock();
+    applyWeather();
+  }
+
+  // Eigene große Wetter-Ansicht (Wetter-Interstitial) – getrennt von der Uhr.
+  function showWeather() {
+    if (currentKey === "weather-screen") return;
+    currentKey = "weather-screen";
+    stopPlayer();
+    PLAYER.classList.add("hidden");
     applyClock();
     applyWeather();
   }
@@ -277,13 +297,16 @@
       showIdle();
       return;
     }
+    if (slot.type === "weather") {
+      showWeather();
+      return;
+    }
     const key = slot.type + ":" + slot.id;
     if (key === currentKey) {
       syncVideo(slot);
       return;
     }
     currentKey = key;
-    CLOCK_SCREEN.classList.add("hidden");
     PLAYER.classList.remove("hidden");
     applyClock();
     applyWeather();

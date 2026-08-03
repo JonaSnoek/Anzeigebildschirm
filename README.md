@@ -54,8 +54,12 @@ Wiedergabe und Benutzer über ein dunkles, modernes Dashboard.
   zusätzlich Beschreibung, groß: zusätzlich Tagesverlauf
   Morgen/Mittag/Abend), Position wie bei der Uhr frei einstellbar und
   **zwei getrennte Größen**: „Größe (bei Medien)“ für das Widget sowie
-  „Größe große Ansicht“ – ohne Medien wird das Wetter **wie die Uhr**
-  groß mittig über den Bildschirm angezeigt
+  „Größe große Ansicht“ für die große Wetter-Ansicht
+- **Getrennte Zwischenansichten** für Uhr und Wetter: Jede kann einzeln
+  aktiviert werden und wird als eigener Zeitpunkt **zwischen** den Medien
+  eingeblendet – **immer einzeln, nie gleichzeitig** (zeigt die Uhr groß,
+  bleibt das Wetter ausgeblendet und umgekehrt); bei den Medien bleiben
+  beide als kleine Widgets sichtbar
 - **Explizites Speichern**: Alle Wiedergabe-Änderungen (Diashow, Uhr, Wetter,
   Positionen, Größen, Anzeigedauer) werden erst über den gut sichtbaren
   Button **„Einstellungen speichern“** übernommen und dann per SSE sofort an
