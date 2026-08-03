@@ -150,13 +150,20 @@ if (mediaPage) {
       return;
     }
     grid.innerHTML = items.map((m, i) => `
-      <div class="media-card" draggable="true" data-id="${m.id}">
+      <div class="media-card ${m.active === false ? "inactive" : ""}" draggable="true" data-id="${m.id}">
         <div class="thumb">${thumb(m)}</div>
         <div class="media-card-body">
           <div class="name" title="${esc(m.name)}">${esc(m.name)}</div>
           <div class="sub">${fmtSize(m.size_bytes)} · ${fmtDate(m.created_at)}</div>
         </div>
         <div class="media-card-actions">
+          <div class="media-toggle" title="Im Anzeigebildschirm zeigen">
+            <label class="switch">
+              <input type="checkbox" data-action="toggle-active" ${m.active === false ? "" : "checked"}>
+              <span></span>
+            </label>
+            <span class="${m.active === false ? "off" : "on"}">${m.active === false ? "Aus" : "An"}</span>
+          </div>
           ${i > 0 ? actionButton("up", "Nach oben", SVG.up) : ""}
           ${i < items.length - 1 ? actionButton("down", "Nach unten", SVG.down) : ""}
           ${actionButton("preview", "Vorschau", SVG.eye)}
@@ -250,6 +257,13 @@ if (mediaPage) {
             loadList();
           };
           input.click();
+        } else if (action === "toggle-active") {
+          const active = btn.checked;
+          const data = await api(`/api/media/${id}/active`, { method: "POST", body: { active } });
+          const updated = items.find((x) => x.id === id);
+          if (updated) updated.active = data.item.active;
+          renderGrid();
+          toast(active ? "Im Anzeigebildschirm aktiv." : "Im Anzeigebildschirm ausgeblendet.", "ok");
         } else if (action === "up" || action === "down") {
           const i = items.findIndex((x) => x.id === id);
           const j = action === "up" ? i - 1 : i + 1;
@@ -322,16 +336,136 @@ if (settingsForm) {
       loop: settingsForm.loop.checked,
       volume: parseInt(volumeRange.value, 10),
       music_enabled: settingsForm.music_enabled.checked,
+
+      clock_enabled: settingsForm.clock_enabled.checked,
+      clock_size: settingsForm.clock_size.value,
+      clock_position: settingsForm.clock_position.value,
+      clock_interstitial: settingsForm.clock_interstitial.checked,
+
+      weather_enabled: settingsForm.weather_enabled.checked,
+      weather_city: settingsForm.weather_city.value.trim(),
+      weather_position: settingsForm.weather_position.value,
+      weather_size: settingsForm.weather_size.value,
     };
     try {
       await api("/api/settings", { method: "POST", body });
       status.classList.remove("error");
       status.textContent = "Einstellungen gespeichert.";
+      toast("Einstellungen gespeichert.", "ok");
     } catch (err) {
       status.textContent = err.message;
       status.classList.add("error");
     }
   });
+}
+
+/* ---------- Live-Vorschau der Anzeige ---------- */
+const previewClock = document.getElementById("preview-clock");
+if (previewClock && settingsForm) {
+  const previewWeather = document.getElementById("preview-weather");
+  const clockSize = settingsForm.clock_size;
+  const clockPos = settingsForm.clock_position;
+  const clockEnabled = settingsForm.clock_enabled;
+  const weatherChk = settingsForm.weather_enabled;
+  const weatherPos = settingsForm.weather_position;
+  const weatherSize = settingsForm.weather_size;
+  const weatherCity = settingsForm.weather_city;
+
+  function updatePreview() {
+    previewClock.className =
+      "preview-clock size-" + (clockSize.value === "big" ? "big" : "small") +
+      " preview-pos-" + clockPos.value;
+    previewClock.style.display = clockEnabled.checked ? "" : "none";
+
+    previewWeather.className =
+      "preview-weather preview-pos-" + weatherPos.value + " size-" + weatherSize.value;
+    previewWeather.style.display = weatherChk.checked ? "" : "none";
+
+    const loc = previewWeather.querySelector(".weather-location");
+    if (loc && weatherCity.value.trim()) loc.textContent = weatherCity.value.trim();
+  }
+
+  settingsForm.querySelectorAll("input, select").forEach((el) => {
+    el.addEventListener("input", updatePreview);
+    el.addEventListener("change", updatePreview);
+  });
+  updatePreview();
+}
+
+/* ---------- Wetterdaten verwalten ---------- */
+const weatherDataCard = document.getElementById("weather-data-card");
+if (weatherDataCard) {
+  const refreshBtn = document.getElementById("weather-refresh-btn");
+  const weatherStatus = document.getElementById("weather-status");
+  const manualForm = document.getElementById("weather-manual-form");
+  const manualStatus = document.getElementById("weather-manual-status");
+
+  const FIELDS = {
+    weather_loc: "location",
+    weather_today_temp: "today_temp",
+    weather_today_desc: "today_desc",
+    weather_tomorrow_temp: "tomorrow_temp",
+    weather_tomorrow_desc: "tomorrow_desc",
+  };
+
+  function fillManual(w) {
+    if (!w) return;
+    document.getElementById("weather_loc").value = w.location || "";
+    const today = w.today || {};
+    const tomorrow = w.tomorrow || {};
+    document.getElementById("weather_today_temp").value = today.temp || "";
+    document.getElementById("weather_today_desc").value = today.desc || "";
+    document.getElementById("weather_tomorrow_temp").value = tomorrow.temp || "";
+    document.getElementById("weather_tomorrow_desc").value = tomorrow.desc || "";
+  }
+
+  async function loadWeather() {
+    try {
+      const data = await api("/api/weather");
+      fillManual(data.weather || {});
+    } catch (err) { /* kein Internet/keine Daten – Felder bleiben leer */ }
+  }
+
+  refreshBtn.addEventListener("click", async () => {
+    weatherStatus.classList.remove("error");
+    weatherStatus.textContent = "Wird aktualisiert …";
+    try {
+      const city = settingsForm.weather_city.value.trim();
+      const data = await api("/api/weather/refresh", { method: "POST", body: { city } });
+      weatherStatus.textContent = "Aktualisiert.";
+      fillManual(data.weather || {});
+      toast("Wetter aktualisiert.", "ok");
+    } catch (err) {
+      weatherStatus.textContent = err.message;
+      weatherStatus.classList.add("error");
+    }
+  });
+
+  manualForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const body = {
+      location: document.getElementById("weather_loc").value.trim(),
+      today: {
+        temp: document.getElementById("weather_today_temp").value.trim(),
+        desc: document.getElementById("weather_today_desc").value.trim(),
+      },
+      tomorrow: {
+        temp: document.getElementById("weather_tomorrow_temp").value.trim(),
+        desc: document.getElementById("weather_tomorrow_desc").value.trim(),
+      },
+    };
+    try {
+      await api("/api/weather", { method: "POST", body });
+      manualStatus.classList.remove("error");
+      manualStatus.textContent = "Gespeichert.";
+      toast("Wetterdaten gespeichert.", "ok");
+    } catch (err) {
+      manualStatus.textContent = err.message;
+      manualStatus.classList.add("error");
+    }
+  });
+
+  loadWeather();
 }
 
 /* ======================================================================

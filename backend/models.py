@@ -1,9 +1,10 @@
 """
 Datenbank-Modelle.
 
-- User:   Administratoren, Editoren und Viewer
-- Media:  hochgeladene Bilder, Videos und Audiodateien
-- Setting: Schlüssel-Wert-Speicher für Wiedergabe-Einstellungen
+- User:         Administratoren, Editoren und Viewer
+- Media:        hochgeladene Bilder, Videos und Audiodateien
+- Setting:      Schlüssel-Wert-Speicher für Wiedergabe-Einstellungen
+- WeatherData:  gecachte Wetterdaten für das Wetter-Widget
 """
 
 from datetime import datetime, timezone
@@ -71,6 +72,7 @@ class Media(db.Model):
     mime_type = db.Column(String(120), nullable=False, default="application/octet-stream")
     size_bytes = db.Column(Integer, nullable=False, default=0)
     sort_order = db.Column(Integer, nullable=False, default=0, index=True)
+    active = db.Column(Boolean, nullable=False, default=True, index=True)
     created_at = db.Column(DateTime, nullable=False, default=_utcnow)
 
     def to_dict(self) -> dict:
@@ -83,6 +85,7 @@ class Media(db.Model):
             "mime_type": self.mime_type,
             "size_bytes": self.size_bytes,
             "sort_order": self.sort_order,
+            "active": self.active,
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }
 
@@ -94,3 +97,48 @@ class Setting(db.Model):
 
     key = db.Column(String(64), primary_key=True)
     value = db.Column(Text, nullable=False, default="")
+
+
+class WeatherData(db.Model):
+    """
+    Gecachte Wetterdaten für das Wetter-Widget (eine Zeile).
+
+    Die Werte werden vom Dienst backend/services/weather.py befüllt –
+    entweder automatisch über die Open-Meteo-API (kostenlos, ohne
+    Schlüssel) oder manuell im Admin-Bereich (falls kein Internet
+    verfügbar ist). Temperatur-Strings sind bewusst frei (z. B.
+    "-3" oder "4"), Beschreibungen sind kurze Texte wie "Leicht bewölkt".
+    """
+
+    __tablename__ = "weather_data"
+
+    id = db.Column(Integer, primary_key=True)
+    location = db.Column(String(120), nullable=False, default="")
+    updated_at = db.Column(DateTime, nullable=False, default=_utcnow)
+
+    # Heute
+    today_temp = db.Column(String(16), nullable=False, default="")
+    today_desc = db.Column(String(120), nullable=False, default="")
+    today_icon = db.Column(String(32), nullable=False, default="")
+
+    # Morgen
+    tomorrow_temp = db.Column(String(16), nullable=False, default="")
+    tomorrow_desc = db.Column(String(120), nullable=False, default="")
+    tomorrow_icon = db.Column(String(32), nullable=False, default="")
+
+    def to_dict(self) -> dict:
+        """Serielles Format für die API."""
+        return {
+            "location": self.location,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+            "today": {
+                "temp": self.today_temp,
+                "desc": self.today_desc,
+                "icon": self.today_icon,
+            },
+            "tomorrow": {
+                "temp": self.tomorrow_temp,
+                "desc": self.tomorrow_desc,
+                "icon": self.tomorrow_icon,
+            },
+        }

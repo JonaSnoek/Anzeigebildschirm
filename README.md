@@ -39,9 +39,15 @@ Wiedergabe und Benutzer über ein dunkles, modernes Dashboard.
 - Videos (MP4, WebM) starten **automatisch** und spielen nacheinander
 - Hintergrundmusik (MP3, WAV, OGG) dauerhaft im Hintergrund
 - **Uhr + Datum**, die sich jede Sekunde aktualisiert:
-  - bei laufenden Medien: kleine Uhr unten rechts
+  - **Größe** konfigurierbar: klein (Ecke) oder groß (mittig)
+  - **Position** wählbar: oben/unten links/rechts (für die kleine Uhr)
+  - **Zwischenansicht** (Interstitial): Uhr-Ansicht zwischen den Medien
   - ohne Medien: große Uhr mittig über den gesamten Bildschirm
-- Erkennt automatisch neue/geänderte Medien (aktualisiert sich selbst)
+- **Wetter-Widget** (optional): Ort, Temperatur und Zustand für heute und
+  morgen – automatisch über Open-Meteo (kostenlos, ohne API-Schlüssel)
+  oder manuell gepflegt; Größe und Position einstellbar
+- **Medien einzeln ein-/ausblenden** (pro Datei, ohne Löschen)
+- Erkennt automatisch neue/geänderte Medien (aktualisiert sich alle 30 s)
 
 ### Anmeldung (`/login`)
 - Modernes Login mit Benutzername + Passwort
@@ -49,11 +55,16 @@ Wiedergabe und Benutzer über ein dunkles, modernes Dashboard.
 
 ### Administrationsbereich
 - **Dashboard:** Anzahl Bilder/Videos/Audiodateien/Benutzer, verwendeter und
-  freier Speicherplatz, letzte Uploads
+  freier Speicherplatz, letzte Uploads, **Live-Vorschau** der aktuellen
+  Anzeige (Uhr/Wetter/aktive Medien als eingebetteter Bildschirm)
 - **Medienverwaltung:** Hochladen, Löschen, Ersetzen, Umbenennen, Sortieren
-  (Drag & Drop + Pfeiltasten), Vorschau
+  (Drag & Drop + Pfeiltasten), Vorschau, **Ein/Aus-Schalter pro Datei**
 - **Wiedergabe-Einstellungen:** Anzeigedauer, Übergang, Autoplay, Loop,
-  Lautstärke, Hintergrundmusik ein/aus
+  Lautstärke, Hintergrundmusik, **Uhr** (Größe/Position/Zwischenansicht),
+  **Wetter-Widget** (aktiv, Ort, Position, Größe) – mit **Live-Vorschau**,
+  die die Änderungen vor dem Speichern in Echtzeit zeigt
+- **Wetterdaten:** automatisch abrufen (Open-Meteo) oder manuell pflegen
+  (falls kein Internet vorhanden ist)
 - **Benutzerverwaltung:** Benutzer anlegen/löschen, Passwort ändern,
   Rollen vergeben, Benutzer deaktivieren
 
@@ -89,12 +100,13 @@ anzeige/
 │   │   ├── dashboard.py        #     Übersicht
 │   │   ├── media.py            #     Medienverwaltung
 │   │   ├── settings.py         #     Wiedergabe-Einstellungen
+│   │   ├── weather.py          #     Wetterdaten (öffentlich + Admin)
 │   │   └── users.py            #     Benutzerverwaltung
-│   ├── services/               #   Geschäftslogik (Media, Settings)
+│   ├── services/               #   Geschäftslogik (Media, Settings, Weather)
 │   ├── __init__.py             #   App-Factory
 │   ├── config.py               #   Konfiguration (Umgebungsvariablen)
 │   ├── database.py             #   Datenbank-Objekt
-│   ├── models.py               #   Datenmodelle (User, Media, Setting)
+│   ├── models.py               #   Datenmodelle (User, Media, Setting, WeatherData)
 │   ├── security.py             #   Auth, Rollen, CSRF
 │   └── wsgi.py                 #   WSGI-Entrypoint
 ├── frontend/                   # Web-Frontend
@@ -342,8 +354,9 @@ cd /home/ubuntu/anzeige
 | Methode | Pfad                                   | Zugriff              | Zweck                        |
 |---------|----------------------------------------|----------------------|------------------------------|
 | GET     | `/`                                    | öffentlich           | Anzeigebildschirm            |
-| GET     | `/api/display`                         | öffentlich           | Daten für den Player         |
+| GET     | `/api/display`                         | öffentlich           | Daten für den Player (Medien + Uhr/Wetter-Einstellungen) |
 | GET     | `/media/<typ>/<datei>`                 | öffentlich           | Medien ausliefern            |
+| GET     | `/api/weather`                         | öffentlich           | Wetterdaten + Widget-Einstellungen |
 | POST    | `/login` · `/logout`                   | –                    | An-/Abmeldung                |
 | GET     | `/dashboard`                           | alle Rollen          | Statistik-Seite              |
 | GET     | `/api/media?type=…`                    | admin/editor         | Medienliste                  |
@@ -351,8 +364,11 @@ cd /home/ubuntu/anzeige
 | POST    | `/api/media/<id>/delete`               | admin/editor         | Datei löschen                |
 | POST    | `/api/media/<id>/rename`               | admin/editor         | Umbenennen                   |
 | POST    | `/api/media/<id>/replace`              | admin/editor         | Datei ersetzen               |
+| POST    | `/api/media/<id>/active`               | admin/editor         | Medium ein-/ausblenden       |
 | POST    | `/api/media/reorder`                   | admin/editor         | Reihenfolge speichern        |
 | GET/POST| `/api/settings`                        | admin/editor         | Einstellungen lesen/speichern|
+| POST    | `/api/weather/refresh`                 | admin/editor         | Wetter von Open-Meteo holen  |
+| POST    | `/api/weather`                         | admin/editor         | Wetter manuell speichern     |
 | GET     | `/api/users`                           | admin                | Benutzerliste                |
 | POST    | `/api/users`                           | admin                | Benutzer anlegen             |
 | POST    | `/api/users/<id>/…`                    | admin                | löschen/rolle/aktiv/passwort |
@@ -378,22 +394,30 @@ cd /home/ubuntu/anzeige
 
 ## Erweiterbarkeit / neue Module
 
-Die Architektur ist modular. Neue Bereiche (Wetter, Nachrichten, Kalender,
-RSS, Webseiten, Live-Dashboards, Präsentationen, PDF, PowerPoint …) fügst
-du wie folgt hinzu:
+Die Architektur ist modular. Neue Bereiche (Nachrichten, Kalender, RSS,
+Webseiten, Live-Dashboards, Präsentationen, PDF, PowerPoint …) fügst du wie
+folgt hinzu:
 
-1. Neue Datei `backend/routes/wetter.py` mit einem Blueprint anlegen
+1. Neue Datei `backend/routes/neu.py` mit einem Blueprint anlegen
 2. In `backend/__init__.py` registrieren:
    ```python
-   from .routes import wetter
-   app.register_blueprint(wetter.bp)
+   from .routes import neu
+   app.register_blueprint(neu.bp)
    ```
 3. Neues Template unter `frontend/templates/` ablegen
 4. Optional neue Module als „Modul“ im Anzeigebereich ergänzen
 
+Das **Wetter-Widget** ist bereits als vollständiges Beispiel umgesetzt:
+Modell (`WeatherData` in `backend/models.py`), Dienst
+(`backend/services/weather.py`), Routen (`backend/routes/weather.py`) und
+Frontend (Widget in `display.js`/`display.css` + Verwaltung in der
+Wiedergabe-Seite).
+
 Die Datenbankmodelle sind in `backend/models.py` zentral und werden beim
 Start automatisch angelegt (`db.create_all()`). Für Schema-Änderungen in
-bestehenden Tabellen später Alembic-Migrationen hinzufügen.
+bestehenden Tabellen führt die App beim Start eine minimale Migration aus
+(siehe `_migrate_schema()` in `backend/__init__.py`). Für umfangreichere
+Änderungen später Alembic-Migrationen hinzufügen.
 
 ---
 

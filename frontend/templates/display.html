@@ -15,15 +15,18 @@
     <div id="layer-b" class="layer"></div>
   </div>
 
-  <!-- Leerzustand: große Uhr mittig über den gesamten Bildschirm -->
-  <div id="empty-state">
-    <div id="clock-big" class="clock-big">--:--:--</div>
-    <div id="date-big" class="date-big"></div>
+  <!-- Uhr-Ansicht (Leerzustand / Interstitial zwischen den Medien) -->
+  <div id="clock-screen" class="hidden">
+    <div id="clock-big">--:--:--</div>
+    <div id="date-big"></div>
     <div class="app-name">{{ site_name }}</div>
   </div>
 
-  <!-- Kleine Uhr unten rechts (bei laufenden Medien) -->
-  <div id="clock-small" class="clock-small"></div>
+  <!-- Uhr-Overlay während der Medienwiedergabe -->
+  <div id="clock-widget" class="hidden"></div>
+
+  <!-- Wetter-Widget -->
+  <div id="weather-widget" class="hidden"></div>
 
   <!-- Hintergrundmusik -->
   <audio id="bg-audio" loop></audio>

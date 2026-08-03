@@ -5,44 +5,183 @@
 {% block content %}
   <h1>Wiedergabe-Einstellungen</h1>
 
-  <div class="card">
-    <form id="settings-form">
-      <div class="field">
-        <label for="slide_duration">Anzeigedauer pro Bild (Sekunden)</label>
-        <input type="number" id="slide_duration" name="slide_duration" min="3" max="300" value="{{ settings.slide_duration }}">
-        <div class="hint">3–300 Sekunden.</div>
+  <div class="settings-layout">
+    <div>
+      <div class="card">
+        <form id="settings-form">
+          <h2>Diashow &amp; Ton</h2>
+          <div class="field">
+            <label for="slide_duration">Anzeigedauer pro Bild (Sekunden)</label>
+            <input type="number" id="slide_duration" name="slide_duration" min="3" max="300" value="{{ settings.slide_duration }}">
+            <div class="hint">3–300 Sekunden.</div>
+          </div>
+
+          <div class="field">
+            <label for="transition">Übergangseffekt</label>
+            <select id="transition" name="transition">
+              <option value="fade" {{ 'selected' if settings.transition == 'fade' }}>Fade (weich)</option>
+              <option value="none" {{ 'selected' if settings.transition == 'none' }}>Keiner</option>
+            </select>
+          </div>
+
+          <div class="checkbox-line">
+            <input type="checkbox" id="autoplay" name="autoplay" {{ 'checked' if settings.autoplay == 'true' }}>
+            <label for="autoplay">Automatische Wiedergabe</label>
+          </div>
+
+          <div class="checkbox-line">
+            <input type="checkbox" id="loop" name="loop" {{ 'checked' if settings.loop == 'true' }}>
+            <label for="loop">Wiederholen (Loop)</label>
+          </div>
+
+          <div class="field">
+            <label for="volume">Lautstärke: <span id="volume-value"></span></label>
+            <input type="range" id="volume" name="volume" min="0" max="100" value="{{ settings.volume }}">
+          </div>
+
+          <div class="checkbox-line">
+            <input type="checkbox" id="music_enabled" name="music_enabled" {{ 'checked' if settings.music_enabled == 'true' }}>
+            <label for="music_enabled">Hintergrundmusik abspielen</label>
+          </div>
+
+          <hr class="separator">
+
+          <h2>Uhr</h2>
+          <div class="checkbox-line">
+            <input type="checkbox" id="clock_enabled" name="clock_enabled" {{ 'checked' if settings.clock_enabled == 'true' }}>
+            <label for="clock_enabled">Uhr auf dem Anzeigebildschirm zeigen</label>
+          </div>
+
+          <div class="field">
+            <label for="clock_size">Uhrgröße</label>
+            <select id="clock_size" name="clock_size">
+              <option value="small" {{ 'selected' if settings.clock_size == 'small' }}>Klein (Ecke)</option>
+              <option value="big" {{ 'selected' if settings.clock_size == 'big' }}>Groß (mittig)</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label for="clock_position">Position der Uhr</label>
+            <select id="clock_position" name="clock_position">
+              <option value="bottom-left" {{ 'selected' if settings.clock_position == 'bottom-left' }}>Unten links</option>
+              <option value="bottom-right" {{ 'selected' if settings.clock_position == 'bottom-right' }}>Unten rechts</option>
+              <option value="top-left" {{ 'selected' if settings.clock_position == 'top-left' }}>Oben links</option>
+              <option value="top-right" {{ 'selected' if settings.clock_position == 'top-right' }}>Oben rechts</option>
+            </select>
+            <div class="hint">Gilt für die kleine Uhr. Bei „Groß“ wird die Uhr mittig angezeigt.</div>
+          </div>
+
+          <div class="checkbox-line">
+            <input type="checkbox" id="clock_interstitial" name="clock_interstitial" {{ 'checked' if settings.clock_interstitial == 'true' }}>
+            <label for="clock_interstitial">Uhr zwischen den Medien zeigen (Zwischenansicht)</label>
+          </div>
+
+          <hr class="separator">
+
+          <h2>Wetter-Widget</h2>
+          <div class="checkbox-line">
+            <input type="checkbox" id="weather_enabled" name="weather_enabled" {{ 'checked' if settings.weather_enabled == 'true' }}>
+            <label for="weather_enabled">Wetter-Widget anzeigen</label>
+          </div>
+
+          <div class="field">
+            <label for="weather_city">Ort</label>
+            <input type="text" id="weather_city" name="weather_city" maxlength="120" placeholder="z. B. Berlin" value="{{ settings.weather_city }}">
+            <div class="hint">Wetterdaten werden automatisch über Open-Meteo abgerufen.</div>
+          </div>
+
+          <div class="field">
+            <label for="weather_position">Position des Wetter-Widgets</label>
+            <select id="weather_position" name="weather_position">
+              <option value="top-left" {{ 'selected' if settings.weather_position == 'top-left' }}>Oben links</option>
+              <option value="top-right" {{ 'selected' if settings.weather_position == 'top-right' }}>Oben rechts</option>
+              <option value="bottom-left" {{ 'selected' if settings.weather_position == 'bottom-left' }}>Unten links</option>
+              <option value="bottom-right" {{ 'selected' if settings.weather_position == 'bottom-right' }}>Unten rechts</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label for="weather_size">Größe des Wetter-Widgets</label>
+            <select id="weather_size" name="weather_size">
+              <option value="small" {{ 'selected' if settings.weather_size == 'small' }}>Klein</option>
+              <option value="medium" {{ 'selected' if settings.weather_size == 'medium' }}>Mittel</option>
+              <option value="large" {{ 'selected' if settings.weather_size == 'large' }}>Groß</option>
+            </select>
+          </div>
+
+          <button type="submit" class="btn btn-primary">Speichern</button>
+          <span id="settings-status" class="status"></span>
+        </form>
       </div>
 
-      <div class="field">
-        <label for="transition">Übergangseffekt</label>
-        <select id="transition" name="transition">
-          <option value="fade" {{ 'selected' if settings.transition == 'fade' }}>Fade (weich)</option>
-          <option value="none" {{ 'selected' if settings.transition == 'none' }}>Keiner</option>
-        </select>
-      </div>
+      <div class="card" id="weather-data-card">
+        <h2>Wetterdaten</h2>
+        <p class="hint">
+          Die Werte werden automatisch aktualisiert. Ohne Internetverbindung
+          können sie hier manuell gepflegt werden.
+        </p>
+        <div class="row-btns">
+          <button type="button" class="btn" id="weather-refresh-btn">Jetzt aktualisieren</button>
+          <span id="weather-status" class="status"></span>
+        </div>
 
-      <div class="checkbox-line">
-        <input type="checkbox" id="autoplay" name="autoplay" {{ 'checked' if settings.autoplay == 'true' }}>
-        <label for="autoplay">Automatische Wiedergabe</label>
+        <form id="weather-manual-form" class="manual-form">
+          <div class="manual-grid">
+            <div class="field">
+              <label for="weather_loc">Ort</label>
+              <input type="text" id="weather_loc" maxlength="120">
+            </div>
+            <div class="field">
+              <label for="weather_today_temp">Temperatur heute (°C)</label>
+              <input type="text" id="weather_today_temp" maxlength="16">
+            </div>
+            <div class="field">
+              <label for="weather_today_desc">Wetter heute</label>
+              <input type="text" id="weather_today_desc" maxlength="120">
+            </div>
+            <div class="field">
+              <label for="weather_tomorrow_temp">Temperatur morgen (°C)</label>
+              <input type="text" id="weather_tomorrow_temp" maxlength="16">
+            </div>
+            <div class="field">
+              <label for="weather_tomorrow_desc">Wetter morgen</label>
+              <input type="text" id="weather_tomorrow_desc" maxlength="120">
+            </div>
+          </div>
+          <button type="submit" class="btn btn-primary">Manuell speichern</button>
+          <span id="weather-manual-status" class="status"></span>
+        </form>
       </div>
+    </div>
 
-      <div class="checkbox-line">
-        <input type="checkbox" id="loop" name="loop" {{ 'checked' if settings.loop == 'true' }}>
-        <label for="loop">Wiederholen (Loop)</label>
+    <div class="card preview-card">
+      <h2>Live-Vorschau</h2>
+      <p class="hint">
+        Zeigt die Einstellungen oben in Echtzeit – noch vor dem Speichern.
+      </p>
+      <div class="preview-wrap">
+        <div class="preview-screen" id="preview-screen">
+          <div class="preview-app-name">Digital Signage</div>
+          <div class="preview-clock" id="preview-clock">
+            <span class="preview-time">12:34:56</span>
+            <span class="preview-date">Montag, 03.08.2026</span>
+          </div>
+          <div class="preview-weather" id="preview-weather">
+            <div class="weather-location">Berlin</div>
+            <div class="weather-row">
+              <span class="weather-desc">Sonnig</span>
+              <span class="weather-temp">23°</span>
+            </div>
+            <div class="weather-row">
+              <span class="weather-day">Morgen</span>
+              <span class="weather-temp">19°</span>
+            </div>
+          </div>
+        </div>
       </div>
-
-      <div class="field">
-        <label for="volume">Lautstärke: <span id="volume-value"></span></label>
-        <input type="range" id="volume" name="volume" min="0" max="100" value="{{ settings.volume }}">
+      <div class="row-btns">
+        <a href="{{ url_for('public.display') }}" target="_blank" rel="noopener" class="btn">Vollbild öffnen ↗</a>
       </div>
-
-      <div class="checkbox-line">
-        <input type="checkbox" id="music_enabled" name="music_enabled" {{ 'checked' if settings.music_enabled == 'true' }}>
-        <label for="music_enabled">Hintergrundmusik abspielen</label>
-      </div>
-
-      <button type="submit" class="btn btn-primary">Speichern</button>
-      <span id="settings-status" class="status"></span>
-    </form>
+    </div>
   </div>
 {% endblock %}

@@ -39,6 +39,36 @@
   </div>
 
   <div class="card">
+    <h2>Aktuelle Anzeige</h2>
+    <div class="display-summary">
+      <div class="chip"><span class="dot"></span>Uhr:
+        {% if stats.settings.clock_enabled == 'true' %}
+          {{ 'Groß' if stats.settings.clock_size == 'big' else 'Klein' }}
+          ({{ stats.settings.clock_position | replace('-', ' ') }})
+          {% if stats.settings.clock_interstitial == 'true' %} · Zwischenansicht{% endif %}
+        {% else %}aus{% endif %}
+      </div>
+      <div class="chip"><span class="dot"></span>Wetter:
+        {% if stats.settings.weather_enabled == 'true' %}
+          {{ stats.settings.weather_city or '–' }}
+          ({{ stats.settings.weather_position | replace('-', ' ') }}, {{ stats.settings.weather_size }})
+        {% else %}aus{% endif %}
+      </div>
+      <div class="chip"><span class="dot"></span>Medien:
+        {{ stats.active_media }} von {{ stats.images + stats.videos + stats.audio }} aktiv
+      </div>
+    </div>
+    <div class="preview-iframe-wrap">
+      <iframe src="{{ url_for('public.display') }}" class="preview-iframe"
+              title="Live-Vorschau des Anzeigebildschirms"></iframe>
+    </div>
+    <div class="row-btns">
+      <a href="{{ url_for('public.display') }}" target="_blank" rel="noopener" class="btn">Vollbild öffnen ↗</a>
+      <a href="{{ url_for('settings.page') }}" class="btn">Anzeige konfigurieren</a>
+    </div>
+  </div>
+
+  <div class="card">
     <h2>Letzte Uploads</h2>
     {% if stats.last_uploads %}
     <table class="table">

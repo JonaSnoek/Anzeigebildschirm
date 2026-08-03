@@ -37,6 +37,28 @@ def _seed_default_settings() -> None:
     db.session.commit()
 
 
+def _migrate_schema() -> None:
+    """
+    Führt minimale Schema-Migrationen für bestehende Datenbanken aus.
+
+    db.create_all() legt nur fehlende Tabellen an, ändert aber keine
+    vorhandenen. Für die neue Spalte media.active wird deshalb ein
+    ALTER TABLE ausgeführt (funktioniert mit SQLite und MariaDB/MySQL).
+    """
+    from sqlalchemy import inspect
+
+    inspector = inspect(db.engine)
+    try:
+        columns = {c["name"] for c in inspector.get_columns("media")}
+    except Exception:
+        return  # Tabelle existiert noch nicht – create_all legt sie an
+    if "active" not in columns:
+        db.session.execute(
+            db.text("ALTER TABLE media ADD COLUMN active BOOLEAN NOT NULL DEFAULT 1")
+        )
+        db.session.commit()
+
+
 def create_app(config_class=Config) -> Flask:
     """
     App-Factory: baut und konfiguriert die Flask-Anwendung.
@@ -60,13 +82,14 @@ def create_app(config_class=Config) -> Flask:
     db.init_app(app)
     with app.app_context():
         db.create_all()
+        _migrate_schema()
         _seed_default_settings()
 
     # CSRF-Schutz global für alle schreibenden Anfragen
     app.before_request(validate_csrf)
 
     # Modulare Blueprints registrieren
-    from .routes import auth, dashboard, media, public, settings, users
+    from .routes import auth, dashboard, media, public, settings, users, weather
 
     app.register_blueprint(public.bp)
     app.register_blueprint(auth.bp)
@@ -74,6 +97,7 @@ def create_app(config_class=Config) -> Flask:
     app.register_blueprint(media.bp)
     app.register_blueprint(settings.bp)
     app.register_blueprint(users.bp)
+    app.register_blueprint(weather.bp)
 
     @app.context_processor
     def _inject_globals() -> dict:

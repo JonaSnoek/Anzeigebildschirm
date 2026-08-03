@@ -73,10 +73,27 @@ class Config:
 
     # ---- Standard-Wiedergabe-Einstellungen ---------------------------------
     DEFAULT_SETTINGS = {
-        "slide_duration": "8",      # Anzeigedauer pro Bild in Sekunden
-        "transition": "fade",       # fade | none
-        "autoplay": "true",         # automatische Wiedergabe
-        "loop": "true",             # Wiederholen
-        "volume": "70",             # Lautstärke 0–100
-        "music_enabled": "true",    # Hintergrundmusik
+        "slide_duration": "8",          # Anzeigedauer pro Bild in Sekunden
+        "transition": "fade",           # fade | none
+        "autoplay": "true",             # automatische Wiedergabe
+        "loop": "true",                 # Wiederholen
+        "volume": "70",                 # Lautstärke 0–100
+        "music_enabled": "true",        # Hintergrundmusik
+
+        # Uhr auf dem Anzeigebildschirm
+        "clock_enabled": "true",        # Uhr grundsätzlich anzeigen
+        "clock_size": "small",          # small | big
+        "clock_position": "bottom-right",  # bottom-left | bottom-right | top-left | top-right
+        "clock_interstitial": "false",  # Uhr-Ansicht zwischen den Medien einblenden
+
+        # Wetter-Widget
+        "weather_enabled": "false",     # Wetter-Widget anzeigen
+        "weather_position": "top-right",  # bottom-left | bottom-right | top-left | top-right
+        "weather_size": "medium",       # small | medium | large
+        "weather_city": "",             # Ortsname für das Wetter (z. B. "Berlin")
     }
+
+    # ---- Wetter -------------------------------------------------------------
+    # Wie lange gespeicherte Wetterdaten gültig bleiben, bevor der Dienst
+    # versucht, frische Daten von Open-Meteo zu holen (Sekunden).
+    WEATHER_TTL = 30 * 60

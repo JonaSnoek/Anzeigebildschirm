@@ -11,6 +11,7 @@ from ..config import BASE_DIR, Config
 from ..database import db
 from ..models import Media
 from ..services.settings import get_all_settings
+from ..services import weather
 
 bp = Blueprint("public", __name__)
 
@@ -24,19 +25,31 @@ def display():
 @bp.get("/api/display")
 def api_display():
     """
-    Liefert Einstellungen und Medienliste für den Anzeigebildschirm.
+    Liefert Einstellungen, Medienliste und Wetterdaten für den
+    Anzeigebildschirm.
 
-    - media: Bilder und Videos (in Sortierreihenfolge, gemeinsame Playlist)
-    - audio: Audiodateien für die Hintergrundmusik
+    - media: aktive Bilder und Videos (in Sortierreihenfolge, Playlist)
+    - audio: aktive Audiodateien für die Hintergrundmusik
+    - weather: Wetterdaten für das Wetter-Widget
     """
     rows = db.session.execute(
-        db.select(Media).order_by(Media.sort_order.asc(), Media.id.asc())
+        db.select(Media)
+        .where(Media.active.is_(True))
+        .order_by(Media.sort_order.asc(), Media.id.asc())
     ).scalars().all()
 
     items = [m.to_dict() for m in rows if m.type in ("image", "video")]
     audio = [m.to_dict() for m in rows if m.type == "audio"]
 
-    return jsonify({"settings": get_all_settings(), "media": items, "audio": audio})
+    settings = get_all_settings()
+    return jsonify(
+        {
+            "settings": settings,
+            "media": items,
+            "audio": audio,
+            "weather": weather.get_weather(settings.get("weather_city", "")),
+        }
+    )
 
 
 @bp.get("/media/<media_type>/<filename>")

@@ -15,6 +15,7 @@ from ..models import Setting
 #   ("bool",)
 #   ("choice", [erlaubte_werte])
 #   ("int", minimum, maximum)
+#   ("str", maximale_länge)
 ALLOWED = {
     "slide_duration": ("int", 3, 300),
     "transition": ("choice", ["fade", "none"]),
@@ -22,6 +23,18 @@ ALLOWED = {
     "loop": ("bool",),
     "volume": ("int", 0, 100),
     "music_enabled": ("bool",),
+
+    # Uhr
+    "clock_enabled": ("bool",),
+    "clock_size": ("choice", ["small", "big"]),
+    "clock_position": ("choice", ["bottom-left", "bottom-right", "top-left", "top-right"]),
+    "clock_interstitial": ("bool",),
+
+    # Wetter
+    "weather_enabled": ("bool",),
+    "weather_position": ("choice", ["bottom-left", "bottom-right", "top-left", "top-right"]),
+    "weather_size": ("choice", ["small", "medium", "large"]),
+    "weather_city": ("str", 120),
 }
 
 
@@ -55,6 +68,8 @@ def _normalize(key: str, raw) -> str:
         if value < low or value > high:
             raise ValueError(f"Wert für {key} muss zwischen {low} und {high} liegen.")
         return str(value)
+    if kind == "str":
+        return str(raw).strip()[: rule[1]]
     return str(raw)
 
 

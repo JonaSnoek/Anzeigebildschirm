@@ -92,6 +92,29 @@ def rename(media_id):
     return jsonify({"ok": True, "item": media.to_dict()})
 
 
+@bp.post("/api/media/<int:media_id>/active")
+@roles_required("admin", "editor")
+def set_active(media_id):
+    """
+    Schaltet ein Medium ein oder aus.
+
+    Inaktive Medien werden im Anzeigebildschirm nicht mehr abgespielt,
+    bleiben aber für später gespeichert. Ohne Body wird der Status
+    umgeschaltet, mit JSON {"active": true|false} explizit gesetzt.
+    """
+    media = db.session.get(Media, media_id)
+    if media is None:
+        return jsonify({"error": "Datei nicht gefunden."}), 404
+
+    data = request.get_json(silent=True) or {}
+    if "active" in data:
+        media.active = bool(data["active"])
+    else:
+        media.active = not media.active
+    db.session.commit()
+    return jsonify({"ok": True, "item": media.to_dict()})
+
+
 @bp.post("/api/media/<int:media_id>/replace")
 @roles_required("admin", "editor")
 def replace(media_id):

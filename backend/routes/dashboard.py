@@ -11,6 +11,7 @@ from ..config import Config
 from ..database import db
 from ..models import Media, User
 from ..security import roles_required
+from ..services.settings import get_all_settings
 
 bp = Blueprint("dashboard", __name__)
 
@@ -43,6 +44,12 @@ def index():
         select(Media).order_by(Media.created_at.desc()).limit(5)
     ).scalars().all()
 
+    active_media = int(
+        db.session.execute(
+            select(func.count()).select_from(Media).where(Media.active.is_(True))
+        ).scalar()
+    )
+
     stats = {
         "images": counts.get("image", 0),
         "videos": counts.get("video", 0),
@@ -55,5 +62,8 @@ def index():
         "free_percent": round(usage.free / usage.total * 100),
         "last_uploads": last_uploads,
         "human_size": _human_size,
+        # Zustand der aktuellen Anzeige
+        "settings": get_all_settings(),
+        "active_media": active_media,
     }
     return render_template("dashboard.html", stats=stats)

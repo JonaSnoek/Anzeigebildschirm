@@ -1,6 +1,7 @@
 /*
  * Digital Signage – Anzeigebildschirm
- * Vollbild, schwarz, große Uhr im Leerzustand, kleine Uhr bei Medien.
+ * Vollbild, schwarz, große Uhr im Leerzustand/Interstitial, konfigurierbares
+ * Uhr-Overlay und Wetter-Widget bei laufenden Medien.
  */
 
 * { box-sizing: border-box; }
@@ -36,32 +37,8 @@ body {
   object-fit: contain;
 }
 
-/* ---------- Kleine Uhr unten rechts (bei Medien) ---------- */
-.clock-small {
-  position: fixed;
-  right: 28px;
-  bottom: 20px;
-  font-size: clamp(1rem, 2.2vh, 1.6rem);
-  font-weight: 500;
-  text-align: right;
-  line-height: 1.35;
-  color: rgba(255, 255, 255, .92);
-  text-shadow: 0 1px 6px rgba(0, 0, 0, .8);
-  z-index: 10;
-  font-variant-numeric: tabular-nums;
-}
-
-.clock-small .clock-date {
-  display: block;
-  font-size: .72em;
-  opacity: .8;
-}
-
-/* Im Leerzustand wird die kleine Uhr ausgeblendet. */
-#empty-state:not(.hidden) ~ #clock-small { display: none; }
-
-/* ---------- Leerzustand: große Uhr mittig ---------- */
-.empty-state {
+/* ---------- Uhr-Ansicht (Leerzustand / Interstitial) ---------- */
+#clock-screen {
   position: fixed;
   inset: 0;
   display: flex;
@@ -73,7 +50,7 @@ body {
   padding: 2rem;
 }
 
-.clock-big {
+#clock-big {
   font-size: clamp(4rem, 16vh, 20vh);
   font-weight: 200;
   letter-spacing: .03em;
@@ -81,7 +58,11 @@ body {
   line-height: 1;
 }
 
-.date-big {
+/* Ist die Uhr deaktiviert, wird in der Uhr-Ansicht nur der Name gezeigt. */
+#clock-screen.no-clock #clock-big,
+#clock-screen.no-clock #date-big { visibility: hidden; }
+
+#date-big {
   font-size: clamp(1.4rem, 4.5vh, 3.5rem);
   font-weight: 300;
   opacity: .85;
@@ -98,3 +79,127 @@ body {
   opacity: .35;
   z-index: 5;
 }
+
+/* ---------- Uhr-Overlay während der Medienwiedergabe ---------- */
+#clock-widget {
+  position: fixed;
+  z-index: 10;
+  font-weight: 500;
+  line-height: 1.3;
+  color: rgba(255, 255, 255, .92);
+  text-shadow: 0 1px 6px rgba(0, 0, 0, .8);
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+
+#clock-widget .clock-time { display: block; }
+
+#clock-widget .clock-date {
+  display: block;
+  font-size: .7em;
+  opacity: .8;
+  font-weight: 400;
+}
+
+/* Positionen */
+.clock-pos-top-left      { top: 24px; left: 28px; text-align: left; }
+.clock-pos-top-right     { top: 24px; right: 28px; text-align: right; }
+.clock-pos-bottom-left   { bottom: 24px; left: 28px; text-align: left; }
+.clock-pos-bottom-right  { bottom: 24px; right: 28px; text-align: right; }
+
+/* Größen */
+#clock-widget.clock-size-small {
+  font-size: clamp(1rem, 2.4vh, 1.7rem);
+}
+
+#clock-widget.clock-size-big {
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  font-size: clamp(3.4rem, 13vh, 15vh);
+  font-weight: 200;
+  letter-spacing: .03em;
+  line-height: 1.1;
+  text-shadow: 0 2px 14px rgba(0, 0, 0, .9);
+}
+
+/* ---------- Wetter-Widget ---------- */
+.weather-widget {
+  position: fixed;
+  z-index: 11;
+  background: rgba(0, 0, 0, .45);
+  border: 1px solid rgba(255, 255, 255, .14);
+  border-radius: 14px;
+  backdrop-filter: blur(4px);
+  color: #fff;
+  pointer-events: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.weather-pos-top-left     { top: 20px; left: 20px; }
+.weather-pos-top-right    { top: 20px; right: 20px; }
+.weather-pos-bottom-left  { bottom: 20px; left: 20px; }
+.weather-pos-bottom-right { bottom: 20px; right: 20px; }
+
+.weather-location {
+  font-weight: 600;
+  letter-spacing: .04em;
+  opacity: .9;
+  display: flex;
+  align-items: center;
+  gap: .4rem;
+}
+
+.weather-location::before {
+  content: "";
+  width: .5em;
+  height: .5em;
+  border-radius: 50%;
+  background: #38bdf8;
+  box-shadow: 0 0 8px #38bdf8;
+}
+
+.weather-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .9rem;
+}
+
+.weather-day { opacity: .85; }
+
+.weather-main { display: flex; align-items: center; gap: .55rem; }
+.weather-desc { opacity: .85; }
+.weather-temp { font-weight: 700; }
+
+.weather-widget svg {
+  width: 1.5em;
+  height: 1.5em;
+  flex-shrink: 0;
+  opacity: .95;
+}
+
+/* Größen */
+.weather-size-small {
+  padding: .45rem .7rem;
+  font-size: .8rem;
+  border-radius: 10px;
+  max-width: 210px;
+}
+.weather-size-small .weather-tomorrow { display: none; }
+.weather-size-small .weather-desc { display: none; }
+
+.weather-size-medium {
+  padding: .6rem .9rem;
+  font-size: .95rem;
+  max-width: 250px;
+}
+
+.weather-size-large {
+  padding: .85rem 1.1rem;
+  font-size: 1.15rem;
+  max-width: 300px;
+}
+.weather-size-large svg { width: 2em; height: 2em; }
+.weather-size-large .weather-temp { font-size: 1.35em; }

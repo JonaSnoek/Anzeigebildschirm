@@ -386,6 +386,174 @@ input[type=range] { width: 100%; max-width: 420px; accent-color: var(--accent); 
 .status { margin-left: .8rem; font-size: .85rem; color: var(--muted); }
 .status.error { color: var(--danger); }
 
+/* ---------- Einstellungen: Layout + Live-Vorschau ---------- */
+.settings-layout {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+  align-items: start;
+}
+
+.separator {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 1.4rem 0;
+}
+
+.row-btns { display: flex; align-items: center; gap: .6rem; margin: .4rem 0 .9rem; }
+
+.manual-form { margin-top: .4rem; }
+
+.manual-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 1.2rem;
+}
+
+.preview-card { position: sticky; top: 1.5rem; }
+
+.preview-wrap { display: flex; justify-content: center; margin: .8rem 0; }
+
+.preview-screen {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  background: #000;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  color: #fff;
+  font-family: "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  user-select: none;
+}
+
+.preview-app-name {
+  position: absolute;
+  top: 7%;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 10px;
+  letter-spacing: .3em;
+  text-transform: uppercase;
+  opacity: .35;
+}
+
+.preview-clock {
+  position: absolute;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, .8);
+}
+
+.preview-clock .preview-time { display: block; }
+.preview-clock .preview-date { display: block; font-size: .7em; opacity: .8; }
+
+.preview-clock.size-small { font-size: 15px; font-weight: 500; line-height: 1.3; }
+.preview-clock.size-big {
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  font-size: 44px;
+  font-weight: 200;
+  line-height: 1.12;
+  letter-spacing: .03em;
+}
+
+.preview-pos-top-left      { top: 8%; left: 5%; text-align: left; }
+.preview-pos-top-right     { top: 8%; right: 5%; text-align: right; }
+.preview-pos-bottom-left   { bottom: 8%; left: 5%; text-align: left; }
+.preview-pos-bottom-right  { bottom: 8%; right: 5%; text-align: right; }
+
+.preview-weather {
+  position: absolute;
+  background: rgba(0, 0, 0, .45);
+  border: 1px solid rgba(255, 255, 255, .14);
+  border-radius: 8px;
+  padding: .4rem .6rem;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.preview-weather .weather-location { font-weight: 600; opacity: .9; }
+.preview-weather .weather-row { display: flex; justify-content: space-between; gap: .7rem; align-items: center; }
+.preview-weather .weather-desc, .preview-weather .weather-day { opacity: .85; }
+.preview-weather .weather-temp { font-weight: 700; }
+
+.preview-weather.size-small { max-width: 170px; }
+.preview-weather.size-medium { font-size: 12.5px; max-width: 200px; }
+.preview-weather.size-large { font-size: 15px; max-width: 240px; }
+
+/* ---------- Medien: Ein/Aus-Schalter ---------- */
+.media-card.inactive .thumb,
+.media-card.inactive .media-card-body { opacity: .45; }
+
+.media-card.inactive {
+  border-style: dashed;
+  border-color: var(--muted);
+}
+
+.media-card-actions .switch { margin-right: auto; }
+
+.media-toggle {
+  display: flex;
+  align-items: center;
+  gap: .45rem;
+  color: var(--muted);
+  font-size: .78rem;
+}
+
+.media-toggle span.on { color: var(--ok); }
+.media-toggle span.off { color: var(--muted); }
+
+/* ---------- Dashboard: Aktuelle Anzeige ---------- */
+.display-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .6rem;
+  margin-bottom: 1rem;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: .5rem;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: .45rem .9rem;
+  font-size: .85rem;
+  color: var(--text);
+}
+
+.chip .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  flex-shrink: 0;
+}
+
+.preview-iframe-wrap {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  background: #000;
+}
+
+.preview-iframe {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  display: block;
+}
+
+@media (max-width: 1000px) {
+  .settings-layout { grid-template-columns: 1fr; }
+  .preview-card { position: static; }
+}
+
 /* ---------- Switch (Aktiv/Inaktiv) ---------- */
 .switch { position: relative; display: inline-block; width: 40px; height: 22px; }
 .switch input { opacity: 0; width: 0; height: 0; }
