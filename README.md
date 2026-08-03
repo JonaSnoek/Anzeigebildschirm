@@ -40,10 +40,10 @@ Wiedergabe und Benutzer über ein dunkles, modernes Dashboard.
 - Videos (MP4, WebM) starten **automatisch** und spielen nacheinander
 - Hintergrundmusik (MP3, WAV, OGG) dauerhaft im Hintergrund
 - **Uhr + Datum**, die sich jede Sekunde aktualisiert:
-  - **Größe** frei skalierbar über Schieberegler (30–300 %)
+  - **Größe** frei skalierbar über Schieberegler (30–600 %)
   - **Position** automatisch (ohne Medien mittig, mit Medien unten rechts)
-    oder **frei wählbar** über X/Y-Schieberegler bzw. **Drag & Drop** in der
-    Live-Vorschau
+    oder **frei wählbar** über **Drag & Drop** in der Live-Vorschau
+    (Position wird sofort gespeichert)
   - **Zwischenansicht** (Interstitial): Uhr-Ansicht zwischen den Medien
   - ohne Medien: große Uhr mittig über den gesamten Bildschirm
 - **Wetter-Widget** (optional): Ort, Temperatur und Zustand für heute und
@@ -72,9 +72,10 @@ Wiedergabe und Benutzer über ein dunkles, modernes Dashboard.
   (Drag & Drop + Pfeiltasten), Vorschau, **Ein/Aus-Schalter pro Datei**
 - **Wiedergabe-Einstellungen:** Anzeigedauer, Übergang, Autoplay, Loop,
   Lautstärke, Hintergrundmusik, **Widgets** (Uhr und Wetter: aktiv,
-  Größe per Schieberegler, Position automatisch oder frei per X/Y,
-  **Drag & Drop** in der Vorschau) – mit **Live-Vorschau**, die jede
-  Änderung vor dem Speichern in Echtzeit zeigt
+  Größe per Schieberegler bis 600 %, Position automatisch oder per
+  **Drag & Drop** in der Vorschau, wird sofort gespeichert) – mit
+  **Live-Vorschau**, die exakt wie die Anzeige rendert (gleiche Symbole,
+  Übersetzungen, Zustände) und jede Änderung in Echtzeit zeigt
 - **Wetterdaten:** automatisch abrufen (Open-Meteo) oder **manuell pflegen**
   (Wetterzustand + Temperatur pro Tag, Symbol wird automatisch angezeigt)
 - **Benutzerverwaltung:** Benutzer anlegen/löschen, Passwort ändern,

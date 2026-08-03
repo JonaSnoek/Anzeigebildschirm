@@ -12,6 +12,7 @@
   <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
   <link rel="apple-touch-icon" href="{{ url_for('static', filename='icons/icon-180.png') }}">
   <title>{{ site_name }}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/widgets.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/display.css') }}">
   <link rel="icon" href="data:,">
 </head>
@@ -23,19 +24,22 @@
   </div>
 
   <!-- Uhr-Ansicht (Leerzustand / Interstitial zwischen den Medien) -->
-  <div id="clock-screen" class="hidden">
-    <div id="clock-screen-block">
-      <div id="clock-big">--:--:--</div>
-      <div id="date-big"></div>
+  <div id="clock-screen" class="clock-screen hidden">
+    <div id="clock-screen-block" class="clock-screen-block">
+      <span id="clock-big" class="clock-big">--:--:--</span>
+      <span id="date-big" class="clock-big-date"></span>
     </div>
     <div class="app-name">{{ site_name }}</div>
   </div>
 
   <!-- Uhr-Widget während der Medienwiedergabe -->
-  <div id="clock-widget" class="hidden"></div>
+  <div id="clock-widget" class="widget-clock clock-auto hidden">
+    <span class="clock-time"></span>
+    <span class="clock-date"></span>
+  </div>
 
   <!-- Wetter-Widget -->
-  <div id="weather-widget" class="hidden"></div>
+  <div id="weather-widget" class="widget-weather weather-large weather-auto hidden"></div>
 
   <!-- Sprachumschalter (Deutsch / Englisch) -->
   <button id="lang-toggle" class="lang-toggle" type="button" title="Sprache wechseln" aria-label="Sprache wechseln">DE</button>
@@ -43,6 +47,7 @@
   <!-- Hintergrundmusik -->
   <audio id="bg-audio" loop></audio>
 
+  <script src="{{ url_for('static', filename='js/widgets.js') }}"></script>
   <script src="{{ url_for('static', filename='js/display.js') }}"></script>
   <script>
     if ("serviceWorker" in navigator) {

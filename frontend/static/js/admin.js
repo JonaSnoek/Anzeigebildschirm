@@ -319,30 +319,6 @@ if (mediaPage) {
  * ====================================================================== */
 const settingsForm = document.getElementById("settings-form");
 if (settingsForm) {
-  const WEATHER_ICONS = {
-    sun: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>',
-    "cloud-sun": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="6" r="3"/><path d="M18 11a4 4 0 011 7H7.5a3.5 3.5 0 01-.5-6.97 4 4 0 016-4.03h1a3.98 3.98 0 014 4z"/><path d="M11 4.2V3M5.8 6H4.5M6.5 8.5l-.9.9"/></svg>',
-    cloud: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M18 11a4 4 0 011 7H7.5a3.5 3.5 0 01-.5-6.97 4 4 0 016-4.03h1a3.98 3.98 0 014 4z"/></svg>',
-    fog: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M18 11a4 4 0 011 7H7.5a3.5 3.5 0 01-.5-6.97 4 4 0 016-4.03h1a3.98 3.98 0 014 4zM4 16h4M4 19h8M4 13h2"/></svg>',
-    rain: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M18 10a4 4 0 011 7H7.5a3.5 3.5 0 01-.5-6.97 4 4 0 016-4.03h1a3.98 3.98 0 014 4zM8 15l-1 2M13 15l-1 2M18 15l-1 2"/></svg>',
-    snow: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M18 10a4 4 0 011 7H7.5a3.5 3.5 0 01-.5-6.97 4 4 0 016-4.03h1a3.98 3.98 0 014 4zM9 15l-1 1M13 15l-1 1M17 15l-1 1M9 18l-1 1M13 18l-1 1"/></svg>',
-    storm: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M18 10a4 4 0 011 7H7.5a3.5 3.5 0 01-.5-6.97 4 4 0 016-4.03h1a3.98 3.98 0 014 4zM11 17l-1.5 3H13l-2 4"/></svg>',
-    showers: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M18 10a4 4 0 011 7H7.5a3.5 3.5 0 01-.5-6.97 4 4 0 016-4.03h1a3.98 3.98 0 014 4zM8 14l-1 1M13 14l-1 1M17 14l-1 1M8 18l-1 1M13 18l-1 1"/></svg>',
-  };
-
-  const WEATHER_STATES = [
-    { id: "sun", label: "Sonnig" },
-    { id: "cloud-sun", label: "Leicht bewölkt" },
-    { id: "cloud", label: "Bewölkt" },
-    { id: "rain", label: "Regen" },
-    { id: "showers", label: "Regenschauer" },
-    { id: "storm", label: "Gewitter" },
-    { id: "snow", label: "Schnee" },
-    { id: "fog", label: "Nebel" },
-  ];
-
-  const WEEKDAYS = ["Sonntag", "Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag"];
-  const pad = (n) => String(n).padStart(2, "0");
   const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
 
   const volumeRange = settingsForm.volume;
@@ -402,17 +378,49 @@ if (settingsForm) {
     sync();
   }
 
-  /* ---------- Live-Vorschau ---------- */
+  /* ---------- Live-Vorschau (nutzt die gleiche Render-Engine wie die
+   *            Anzeige – Signage aus widgets.js) ---------- */
   const previewScreen = document.getElementById("preview-screen");
+  const previewClockScreen = document.getElementById("preview-clock-screen");
+  const previewClockBlock = document.getElementById("preview-clock-block");
   const previewClock = document.getElementById("preview-clock");
   const previewWeather = document.getElementById("preview-weather");
-  const previewTime = previewClock.querySelector(".preview-time");
-  const previewDate = previewClock.querySelector(".preview-date");
   const previewContext = { value: "media" };
+
   const weatherPreviewState = {
     today: { icon: "sun", temp: "" },
     tomorrow: { icon: "cloud-sun", temp: "" },
   };
+
+  function previewLang() {
+    const v = localStorage.getItem("display_lang");
+    return Signage.LANGS.indexOf(v) >= 0 ? v : "de";
+  }
+
+  function widgetCfg(name) {
+    const f = settingsForm;
+    return {
+      enabled: f[name + "_enabled"].checked,
+      mode: f[name + "_mode"].value,
+      x: parseInt(f[name + "_x"].value, 10),
+      y: parseInt(f[name + "_y"].value, 10),
+      sizePct: parseInt(f[name + "_size_pct"].value, 10),
+    };
+  }
+
+  function weatherPreviewData() {
+    return {
+      location: settingsForm.weather_city.value.trim(),
+      today: weatherPreviewState.today,
+      tomorrow: weatherPreviewState.tomorrow,
+    };
+  }
+
+  function syncPreviewSize() {
+    const r = previewScreen.getBoundingClientRect();
+    previewScreen.style.setProperty("--screen-w", r.width + "px");
+    previewScreen.style.setProperty("--screen-h", r.height + "px");
+  }
 
   function updateSliderFill() {
     document.querySelectorAll("input[type=range].slider").forEach((slider) => {
@@ -423,64 +431,64 @@ if (settingsForm) {
     });
   }
 
-  function renderPreviewWeather() {
-    const display = settingsForm.weather_display.value === "small" ? "small" : "large";
-    const city = settingsForm.weather_city.value.trim();
-    const blocks = ["today", "tomorrow"].map((key) => {
-      const d = weatherPreviewState[key] || {};
-      const label = key === "today" ? "Heute" : "Morgen";
-      const state = WEATHER_STATES.find((s) => s.id === d.icon);
-      const desc = state ? state.label : "";
-      return `
-      <div class="weather-block weather-${key}">
-        ${display === "large" ? `<div class="weather-head">${label}</div>` : ""}
-        <div class="weather-body">
-          <span class="weather-icon">${WEATHER_ICONS[d.icon] || WEATHER_ICONS.cloud}</span>
-          <div class="weather-info">
-            <span class="weather-temp">${d.temp ? esc(d.temp) + "°" : "--°"}</span>
-            ${display === "large" ? `<span class="weather-desc">${esc(desc)}</span>` : ""}
-          </div>
-          ${display === "small" ? `<span class="weather-day">${label}</span>` : ""}
-        </div>
-      </div>`;
-    }).join("");
-    previewWeather.innerHTML =
-      (city ? `<div class="weather-location">${esc(city)}</div>` : "") + blocks;
-  }
-
   function renderPreview() {
-    const clockSize = parseInt(settingsForm.clock_size_pct.value, 10) / 100;
-    previewClock.style.display = settingsForm.clock_enabled.checked ? "" : "none";
-    previewClock.style.setProperty("--widget-scale", clockSize);
-    if (settingsForm.clock_mode.value === "custom") {
-      previewClock.className = "preview-clock preview-custom";
-      previewClock.style.left = settingsForm.clock_x.value + "%";
-      previewClock.style.top = settingsForm.clock_y.value + "%";
-    } else if (previewContext.value === "empty") {
-      previewClock.className = "preview-clock preview-empty";
-      previewClock.style.left = "";
-      previewClock.style.top = "";
+    syncPreviewSize();
+    const lang = previewLang();
+    const clock = widgetCfg("clock");
+    const weather = widgetCfg("weather");
+    const media = previewContext.value === "media";
+
+    // Große Uhr-Ansicht (ohne Medien / Interstitial)
+    previewClockScreen.classList.toggle("hidden", media);
+    previewClockScreen.classList.toggle("no-clock", !clock.enabled);
+    previewClockBlock.style.setProperty("--widget-scale", clock.sizePct / 100);
+    previewClockBlock.classList.toggle("clock-custom", clock.mode === "custom");
+    if (clock.mode === "custom") {
+      previewClockBlock.style.left = clock.x + "%";
+      previewClockBlock.style.top = clock.y + "%";
     } else {
-      previewClock.className = "preview-clock preview-media";
+      previewClockBlock.style.left = "";
+      previewClockBlock.style.top = "";
+    }
+
+    // Uhr-Widget (Overlay während der Medien)
+    previewClock.style.setProperty("--widget-scale", clock.sizePct / 100);
+    previewClock.className = "widget-clock embedded clock-" + clock.mode;
+    if (clock.mode === "custom") {
+      previewClock.style.left = clock.x + "%";
+      previewClock.style.top = clock.y + "%";
+    } else {
       previewClock.style.left = "";
       previewClock.style.top = "";
     }
+    previewClock.classList.toggle("hidden", !media || !clock.enabled);
 
-    const weatherSize = parseInt(settingsForm.weather_size_pct.value, 10) / 100;
-    previewWeather.style.display = settingsForm.weather_enabled.checked ? "" : "none";
-    previewWeather.style.setProperty("--widget-scale", weatherSize);
-    if (settingsForm.weather_mode.value === "custom") {
-      previewWeather.className = "preview-weather preview-custom";
-      previewWeather.style.left = settingsForm.weather_x.value + "%";
-      previewWeather.style.top = settingsForm.weather_y.value + "%";
+    // Wetter-Widget
+    const display = settingsForm.weather_display.value === "small" ? "small" : "large";
+    previewWeather.style.setProperty("--widget-scale", weather.sizePct / 100);
+    previewWeather.className = "widget-weather embedded weather-" + display + " weather-" + weather.mode;
+    if (weather.mode === "custom") {
+      previewWeather.style.left = weather.x + "%";
+      previewWeather.style.top = weather.y + "%";
     } else {
-      previewWeather.className = "preview-weather preview-auto";
       previewWeather.style.left = "";
       previewWeather.style.top = "";
     }
+    previewWeather.classList.toggle("hidden", !weather.enabled);
+    previewWeather.innerHTML = Signage.weatherMarkup(weatherPreviewData(), display, lang);
 
-    renderPreviewWeather();
+    updatePreviewClock();
     updateSliderFill();
+  }
+
+  function updatePreviewClock() {
+    const now = new Date();
+    const time = Signage.formatTime(now);
+    const date = Signage.formatDate(now, previewLang());
+    previewClock.querySelector(".clock-time").textContent = time;
+    previewClock.querySelector(".clock-date").textContent = date;
+    previewClockBlock.querySelector(".clock-big").textContent = time;
+    previewClockBlock.querySelector(".clock-big-date").textContent = date;
   }
 
   function bindSlider(slider) {
@@ -493,65 +501,101 @@ if (settingsForm) {
 
   document.querySelectorAll("input[type=range].slider").forEach(bindSlider);
 
-  function tickPreviewClock() {
-    const n = new Date();
-    if (previewTime) previewTime.textContent = `${pad(n.getHours())}:${pad(n.getMinutes())}:${pad(n.getSeconds())}`;
-    if (previewDate) previewDate.textContent = `${WEEKDAYS[n.getDay()]}, ${pad(n.getDate())}.${pad(n.getMonth() + 1)}.${n.getFullYear()}`;
-  }
+  /* ---------- Drag & Drop der Widgets (Position wird sofort gespeichert) ---------- */
+  let dragState = null;
 
-  /* ---------- Drag & Drop der Widgets ---------- */
-  let dragging = null;
-  function pointToPct(clientX, clientY) {
+  function pointPct(clientX, clientY) {
     const r = previewScreen.getBoundingClientRect();
     return {
-      x: clamp(Math.round(((clientX - r.left) / r.width) * 100), 0, 100),
-      y: clamp(Math.round(((clientY - r.top) / r.height) * 100), 0, 100),
+      x: ((clientX - r.left) / r.width) * 100,
+      y: ((clientY - r.top) / r.height) * 100,
     };
   }
 
-  function beginDrag(e, widget) {
-    e.preventDefault();
-    if (!settingsForm[widget + "_enabled"].checked) return;
-    if (settingsForm[widget + "_mode"].value !== "custom") {
-      settingsForm[widget + "_mode"].value = "custom";
-      document.querySelectorAll("#" + widget + "_mode_seg button").forEach((b) =>
-        b.classList.toggle("active", b.dataset.value === "custom"));
-    }
-    dragging = widget;
-    applyDragPos(e.clientX, e.clientY);
+  function elementCenterPct(el) {
+    const s = previewScreen.getBoundingClientRect();
+    const r = el.getBoundingClientRect();
+    return {
+      x: ((r.left + r.width / 2 - s.left) / s.width) * 100,
+      y: ((r.top + r.height / 2 - s.top) / s.height) * 100,
+    };
   }
 
-  function applyDragPos(clientX, clientY) {
-    if (!dragging) return;
-    const p = pointToPct(clientX, clientY);
-    settingsForm[dragging + "_x"].value = p.x;
-    settingsForm[dragging + "_y"].value = p.y;
+  function setModeUi(name, mode) {
+    settingsForm[name + "_mode"].value = mode;
+    document.querySelectorAll("#" + name + "_mode_seg button").forEach((b) =>
+      b.classList.toggle("active", b.dataset.value === mode));
+  }
+
+  function beginDrag(e, name, el) {
+    if (!settingsForm[name + "_enabled"].checked) return;
+    e.preventDefault();
+    if (settingsForm[name + "_mode"].value !== "custom") setModeUi(name, "custom");
+    const center = elementCenterPct(el);
+    const p = pointPct(e.clientX, e.clientY);
+    dragState = { name, startX: p.x, startY: p.y, centerX: center.x, centerY: center.y };
+  }
+
+  function moveDrag(e) {
+    if (!dragState) return;
+    const p = pointPct(e.clientX, e.clientY);
+    const x = clamp(dragState.centerX + (p.x - dragState.startX), 0, 100);
+    const y = clamp(dragState.centerY + (p.y - dragState.startY), 0, 100);
+    settingsForm[dragState.name + "_x"].value = Math.round(x);
+    settingsForm[dragState.name + "_y"].value = Math.round(y);
     renderPreview();
   }
 
+  async function endDrag() {
+    if (!dragState) return;
+    const name = dragState.name;
+    dragState = null;
+    try {
+      await api("/api/settings", {
+        method: "POST",
+        body: {
+          [name + "_mode"]: "custom",
+          [name + "_x"]: parseInt(settingsForm[name + "_x"].value, 10),
+          [name + "_y"]: parseInt(settingsForm[name + "_y"].value, 10),
+        },
+      });
+      toast("Position gespeichert.", "ok");
+    } catch (err) {
+      toast(err.message, "error");
+    }
+  }
+
   previewScreen.addEventListener("pointerdown", (e) => {
-    if (e.target.closest(".preview-clock")) beginDrag(e, "clock");
-    else if (e.target.closest(".preview-weather")) beginDrag(e, "weather");
+    const big = e.target.closest("#preview-clock-screen .clock-screen-block");
+    const overlay = e.target.closest("#preview-clock");
+    const weather = e.target.closest("#preview-weather");
+    if (big && previewContext.value === "empty") beginDrag(e, "clock", big);
+    else if (overlay && previewContext.value === "media") beginDrag(e, "clock", overlay);
+    else if (weather) beginDrag(e, "weather", weather);
   });
-  previewScreen.addEventListener("pointermove", (e) => {
-    if (dragging) applyDragPos(e.clientX, e.clientY);
-  });
-  const endDrag = () => { dragging = null; };
-  previewScreen.addEventListener("pointerup", endDrag);
-  previewScreen.addEventListener("pointercancel", endDrag);
+  window.addEventListener("pointermove", moveDrag);
+  window.addEventListener("pointerup", () => endDrag());
+  window.addEventListener("pointercancel", () => { dragState = null; });
 
   bindSegmented("clock_mode_seg", settingsForm.clock_mode, () => renderPreview());
   bindSegmented("weather_mode_seg", settingsForm.weather_mode, () => renderPreview());
   bindSegmented("weather_display_seg", settingsForm.weather_display, () => renderPreview());
   bindSegmented("preview_context_seg", previewContext, () => renderPreview());
 
+  const previewLangTarget = { value: previewLang() };
+  bindSegmented("preview_lang_seg", previewLangTarget, () => {
+    localStorage.setItem("display_lang", previewLangTarget.value);
+    renderPreview();
+  });
+
   settingsForm.querySelectorAll("input, select").forEach((el) => {
     el.addEventListener("input", renderPreview);
     el.addEventListener("change", renderPreview);
   });
+  window.addEventListener("resize", syncPreviewSize);
 
-  tickPreviewClock();
-  setInterval(tickPreviewClock, 1000);
+  updatePreviewClock();
+  setInterval(updatePreviewClock, 1000);
   renderPreview();
 
   /* ---------- Wetterdaten verwalten ---------- */
@@ -575,10 +619,10 @@ if (settingsForm) {
   function updateIconPreviews() {
     ["today", "tomorrow"].forEach((key) => {
       const icon = stateSelects[key].value;
-      if (iconPreviews[key]) iconPreviews[key].innerHTML = WEATHER_ICONS[icon] || WEATHER_ICONS.cloud;
+      if (iconPreviews[key]) iconPreviews[key].innerHTML = Signage.WEATHER_ICONS[icon] || Signage.WEATHER_ICONS.cloud;
       weatherPreviewState[key].icon = icon;
     });
-    renderPreviewWeather();
+    renderPreview();
   }
 
   function fillManual(w) {
@@ -589,8 +633,8 @@ if (settingsForm) {
       const select = stateSelects[key];
       if (select && Array.from(select.options).some((o) => o.value === iconId)) select.value = iconId;
     };
-    setState("today", today.icon || "sun");
-    setState("tomorrow", tomorrow.icon || "cloud-sun");
+    setState("today", today.state || today.icon || "sun");
+    setState("tomorrow", tomorrow.state || tomorrow.icon || "cloud-sun");
     tempInputs.today.value = today.temp || "";
     tempInputs.tomorrow.value = tomorrow.temp || "";
     weatherPreviewState.today = { icon: stateSelects.today.value, temp: today.temp || "" };
@@ -605,7 +649,7 @@ if (settingsForm) {
     });
     tempInputs[key].addEventListener("input", () => {
       weatherPreviewState[key].temp = tempInputs[key].value.trim();
-      renderPreviewWeather();
+      renderPreview();
     });
   });
 
@@ -641,12 +685,12 @@ if (settingsForm) {
         location: settingsForm.weather_city.value.trim(),
         today: {
           temp: tempInputs.today.value.trim(),
-          desc: (WEATHER_STATES.find((s) => s.id === stateSelects.today.value) || {}).label || "",
+          desc: (Signage.WEATHER_STATES.find((s) => s.id === stateSelects.today.value) || {}).label || "",
           icon: stateSelects.today.value,
         },
         tomorrow: {
           temp: tempInputs.tomorrow.value.trim(),
-          desc: (WEATHER_STATES.find((s) => s.id === stateSelects.tomorrow.value) || {}).label || "",
+          desc: (Signage.WEATHER_STATES.find((s) => s.id === stateSelects.tomorrow.value) || {}).label || "",
           icon: stateSelects.tomorrow.value,
         },
       };
@@ -664,6 +708,7 @@ if (settingsForm) {
 
   loadWeather();
 }
+
 
 /* ======================================================================
  * BENUTZER

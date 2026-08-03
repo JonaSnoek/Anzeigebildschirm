@@ -8,6 +8,9 @@
  * - Uhr + Wetter: frei konfigurierbar (Größe per Schieberegler,
  *   Position automatisch oder frei per X/Y)
  * - Aktualisiert die Daten alle 30 Sekunden (Live-Vorschau/Änderungen)
+ *
+ * Symbole, Übersetzungen und Widget-Markup kommen aus der gemeinsamen
+ * Render-Engine `Signage` (js/widgets.js) – identisch mit der Vorschau.
  */
 
 "use strict";
@@ -25,55 +28,10 @@
   const AUDIO = document.getElementById("bg-audio");
   const LANG_BTN = document.getElementById("lang-toggle");
 
-  const LANGS = ["de", "en"];
-
-  const I18N = {
-    de: {
-      today: "Heute",
-      tomorrow: "Morgen",
-      "no-data": "Keine Daten",
-      sun: "Sonnig",
-      "cloud-sun": "Leicht bewölkt",
-      cloud: "Bewölkt",
-      fog: "Nebel",
-      rain: "Regen",
-      showers: "Regenschauer",
-      storm: "Gewitter",
-      snow: "Schnee",
-    },
-    en: {
-      today: "Today",
-      tomorrow: "Tomorrow",
-      "no-data": "No data",
-      sun: "Sunny",
-      "cloud-sun": "Partly Cloudy",
-      cloud: "Cloudy",
-      fog: "Fog",
-      rain: "Rain",
-      showers: "Showers",
-      storm: "Thunderstorm",
-      snow: "Snow",
-    },
-  };
+  const LANGS = Signage.LANGS;
 
   let lang = localStorage.getItem("display_lang");
   if (!LANGS.includes(lang)) lang = "de";
-  const t = (key) => (I18N[lang] && I18N[lang][key]) || key;
-  const tWeather = (stateKey, fallback) => {
-    if (fallback && fallback.trim() === "Keine Daten") return t("no-data");
-    return (I18N[lang] && I18N[lang][stateKey]) || fallback || stateKey || t("no-data");
-  };
-
-  const WEATHER_ICONS = {
-    sun: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>',
-    "cloud-sun": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="6" r="3"/><path d="M18 11a4 4 0 011 7H7.5a3.5 3.5 0 01-.5-6.97 4 4 0 016-4.03h1a3.98 3.98 0 014 4z"/><path d="M11 4.2V3M5.8 6H4.5M6.5 8.5l-.9.9"/></svg>',
-    cloud: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M18 11a4 4 0 011 7H7.5a3.5 3.5 0 01-.5-6.97 4 4 0 016-4.03h1a3.98 3.98 0 014 4z"/></svg>',
-    fog: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M18 11a4 4 0 011 7H7.5a3.5 3.5 0 01-.5-6.97 4 4 0 016-4.03h1a3.98 3.98 0 014 4zM4 16h4M4 19h8M4 13h2"/></svg>',
-    rain: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M18 10a4 4 0 011 7H7.5a3.5 3.5 0 01-.5-6.97 4 4 0 016-4.03h1a3.98 3.98 0 014 4zM8 15l-1 2M13 15l-1 2M18 15l-1 2"/></svg>',
-    snow: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M18 10a4 4 0 011 7H7.5a3.5 3.5 0 01-.5-6.97 4 4 0 016-4.03h1a3.98 3.98 0 014 4zM9 15l-1 1M13 15l-1 1M17 15l-1 1M9 18l-1 1M13 18l-1 1"/></svg>',
-    storm: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M18 10a4 4 0 011 7H7.5a3.5 3.5 0 01-.5-6.97 4 4 0 016-4.03h1a3.98 3.98 0 014 4zM11 17l-1.5 3H13l-2 4"/></svg>',
-    showers: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M18 10a4 4 0 011 7H7.5a3.5 3.5 0 01-.5-6.97 4 4 0 016-4.03h1a3.98 3.98 0 014 4zM8 14l-1 1M13 14l-1 1M17 14l-1 1M8 18l-1 1M13 18l-1 1"/></svg>',
-  };
 
   const state = {
     settings: {},
@@ -88,27 +46,15 @@
     signature: "",
   };
 
-  const pad = (n) => String(n).padStart(2, "0");
-
-  function esc(text) {
-    return String(text == null ? "" : text).replace(/[&<>"']/g, (c) => ({
-      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
-    }[c]));
-  }
-
   /* ---------- Uhr ---------- */
   function updateClock() {
     const now = new Date();
-    const time = `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
-    const date = now.toLocaleDateString(lang, {
-      weekday: "long",
-      day: "numeric",
-      month: "numeric",
-      year: "numeric",
-    });
+    const time = Signage.formatTime(now);
+    const date = Signage.formatDate(now, lang);
     CLOCK_BIG.textContent = time;
     DATE_BIG.textContent = date;
-    CLOCK_WIDGET.innerHTML = `<span class="clock-time">${time}</span><span class="clock-date">${date}</span>`;
+    CLOCK_WIDGET.querySelector(".clock-time").textContent = time;
+    CLOCK_WIDGET.querySelector(".clock-date").textContent = date;
   }
 
   /* ---------- Einstellungen ---------- */
@@ -133,7 +79,7 @@
       clockMode: s.clock_mode === "custom" ? "custom" : "auto",
       clockX: toInt(s.clock_x, 50, 0, 100),
       clockY: toInt(s.clock_y, 50, 0, 100),
-      clockSizePct: toInt(s.clock_size_pct, 100, 30, 300) / 100,
+      clockSizePct: toInt(s.clock_size_pct, 100, 30, 600) / 100,
       interstitial: s.clock_interstitial === "true",
 
       // Wetter
@@ -142,7 +88,7 @@
       weatherMode: s.weather_mode === "custom" ? "custom" : "auto",
       weatherX: toInt(s.weather_x, 50, 0, 100),
       weatherY: toInt(s.weather_y, 50, 0, 100),
-      weatherSizePct: toInt(s.weather_size_pct, 100, 30, 300) / 100,
+      weatherSizePct: toInt(s.weather_size_pct, 100, 30, 600) / 100,
     };
   }
 
@@ -169,11 +115,11 @@
     CLOCK_WIDGET.classList.remove("hidden");
     CLOCK_WIDGET.style.setProperty("--widget-scale", c.clockSizePct);
     if (c.clockMode === "custom") {
-      CLOCK_WIDGET.className = "clock-custom";
+      CLOCK_WIDGET.className = "widget-clock clock-custom";
       CLOCK_WIDGET.style.left = c.clockX + "%";
       CLOCK_WIDGET.style.top = c.clockY + "%";
     } else {
-      CLOCK_WIDGET.className = "clock-auto";
+      CLOCK_WIDGET.className = "widget-clock clock-auto";
       CLOCK_WIDGET.style.left = "";
       CLOCK_WIDGET.style.top = "";
     }
@@ -184,7 +130,7 @@
   function renderWeather() {
     const c = cfg();
     const display = c.weatherDisplay === "small" ? "small" : "large";
-    WEATHER.className = "weather-widget weather-" + display;
+    WEATHER.className = "widget-weather weather-" + display;
     WEATHER.classList.remove("hidden");
     WEATHER.style.setProperty("--widget-scale", c.weatherSizePct);
     if (c.weatherMode === "custom") {
@@ -199,35 +145,11 @@
 
     if (!c.weatherEnabled || !state.weather || !state.weather.location) {
       WEATHER.classList.add("hidden");
+      WEATHER.innerHTML = "";
       return;
     }
 
-    const w = state.weather;
-    const icon = (key) => WEATHER_ICONS[key] || WEATHER_ICONS.cloud;
-
-    const block = (label, day) => {
-      const d = day || { temp: "", desc: "", icon: "cloud" };
-      const stateKey = d.state || d.icon || "cloud";
-      const head = label === "today" ? t("today") : t("tomorrow");
-      const desc = tWeather(stateKey, d.desc);
-      return `
-      <div class="weather-block weather-${label}">
-        ${display === "large" ? `<div class="weather-head">${head}</div>` : ""}
-        <div class="weather-body">
-          <span class="weather-icon">${icon(stateKey)}</span>
-          <div class="weather-info">
-            <span class="weather-temp">${esc(d.temp)}°</span>
-            ${display === "large" ? `<span class="weather-desc">${esc(desc)}</span>` : ""}
-          </div>
-          ${display === "small" ? `<span class="weather-day">${head}</span>` : ""}
-        </div>
-      </div>`;
-    };
-
-    WEATHER.innerHTML =
-      `<div class="weather-location">${esc(w.location)}</div>` +
-      block("today", w.today) +
-      block("tomorrow", w.tomorrow);
+    WEATHER.innerHTML = Signage.weatherMarkup(state.weather, display, lang);
   }
 
   /* ---------- Hilfsfunktionen ---------- */

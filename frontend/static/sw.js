@@ -12,7 +12,7 @@
 
 "use strict";
 
-const VERSION = "v1";
+const VERSION = "v2";
 const CACHE = "anzeige-" + VERSION;
 
 const PRECACHE = [
@@ -20,8 +20,10 @@ const PRECACHE = [
   "/static/manifest.json",
   "/static/css/display.css",
   "/static/css/style.css",
+  "/static/css/widgets.css",
   "/static/js/display.js",
   "/static/js/admin.js",
+  "/static/js/widgets.js",
   "/static/icons/icon-192.png",
   "/static/icons/icon-512.png",
   "/static/icons/icon-512-maskable.png",

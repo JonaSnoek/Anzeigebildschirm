@@ -65,33 +65,28 @@
           <div class="widget-body">
             <div class="slider-row">
               <span class="slider-label">Größe</span>
-              <input type="range" class="slider" id="clock_size_pct" name="clock_size_pct" min="30" max="300" step="5" value="{{ settings.clock_size_pct }}">
+              <input type="range" class="slider" id="clock_size_pct" name="clock_size_pct" min="30" max="600" step="5" value="{{ settings.clock_size_pct }}">
               <span class="slider-value" id="clock_size_pct_val">{{ settings.clock_size_pct }}%</span>
-            </div>
-            <div class="slider-row">
-              <span class="slider-label">X-Position</span>
-              <input type="range" class="slider" id="clock_x" name="clock_x" min="0" max="100" step="1" value="{{ settings.clock_x }}">
-              <span class="slider-value" id="clock_x_val">{{ settings.clock_x }}%</span>
-            </div>
-            <div class="slider-row">
-              <span class="slider-label">Y-Position</span>
-              <input type="range" class="slider" id="clock_y" name="clock_y" min="0" max="100" step="1" value="{{ settings.clock_y }}">
-              <span class="slider-value" id="clock_y_val">{{ settings.clock_y }}%</span>
             </div>
 
             <div class="segmented" id="clock_mode_seg">
               <button type="button" data-value="auto">Automatisch</button>
-              <button type="button" data-value="custom">Manuell</button>
+              <button type="button" data-value="custom">Positioniert</button>
             </div>
             <input type="hidden" id="clock_mode" name="clock_mode" value="{{ settings.clock_mode }}">
             <div class="hint" id="clock_mode_hint">
-              Automatisch: ohne Medien mittig, mit Medien unten rechts.
+              Automatisch: ohne Medien mittig, mit Medien unten rechts. Für eine
+              freie Position das Widget in der Vorschau direkt verschieben.
             </div>
 
             <div class="checkbox-line">
               <input type="checkbox" id="clock_interstitial" name="clock_interstitial" {{ 'checked' if settings.clock_interstitial == 'true' }}>
               <label for="clock_interstitial">Uhr-Ansicht zwischen den Medien zeigen</label>
             </div>
+
+            <!-- Position wird nur per Drag &amp; Drop in der Vorschau gesetzt -->
+            <input type="hidden" id="clock_x" name="clock_x" value="{{ settings.clock_x }}">
+            <input type="hidden" id="clock_y" name="clock_y" value="{{ settings.clock_y }}">
           </div>
         </section>
 
@@ -129,28 +124,23 @@
 
             <div class="slider-row">
               <span class="slider-label">Größe</span>
-              <input type="range" class="slider" id="weather_size_pct" name="weather_size_pct" min="30" max="300" step="5" value="{{ settings.weather_size_pct }}">
+              <input type="range" class="slider" id="weather_size_pct" name="weather_size_pct" min="30" max="600" step="5" value="{{ settings.weather_size_pct }}">
               <span class="slider-value" id="weather_size_pct_val">{{ settings.weather_size_pct }}%</span>
-            </div>
-            <div class="slider-row">
-              <span class="slider-label">X-Position</span>
-              <input type="range" class="slider" id="weather_x" name="weather_x" min="0" max="100" step="1" value="{{ settings.weather_x }}">
-              <span class="slider-value" id="weather_x_val">{{ settings.weather_x }}%</span>
-            </div>
-            <div class="slider-row">
-              <span class="slider-label">Y-Position</span>
-              <input type="range" class="slider" id="weather_y" name="weather_y" min="0" max="100" step="1" value="{{ settings.weather_y }}">
-              <span class="slider-value" id="weather_y_val">{{ settings.weather_y }}%</span>
             </div>
 
             <div class="segmented" id="weather_mode_seg">
               <button type="button" data-value="auto">Automatisch</button>
-              <button type="button" data-value="custom">Manuell</button>
+              <button type="button" data-value="custom">Positioniert</button>
             </div>
             <input type="hidden" id="weather_mode" name="weather_mode" value="{{ settings.weather_mode }}">
             <div class="hint" id="weather_mode_hint">
-              Automatisch: oben rechts.
+              Automatisch: oben rechts. Für eine freie Position das Widget in
+              der Vorschau direkt verschieben.
             </div>
+
+            <!-- Position wird nur per Drag &amp; Drop in der Vorschau gesetzt -->
+            <input type="hidden" id="weather_x" name="weather_x" value="{{ settings.weather_x }}">
+            <input type="hidden" id="weather_y" name="weather_y" value="{{ settings.weather_y }}">
           </div>
         </section>
       </div>
@@ -221,21 +211,37 @@
       <div class="card preview-card">
         <h2>Live-Vorschau</h2>
         <p class="hint">
-          Alle Änderungen werden sofort angezeigt. Widgets lassen sich im
-          Vorschaufenster per Drag &amp; Drop verschieben.
+          Zeigt exakt den späteren Anzeigebildschirm. Alle Änderungen werden
+          sofort übernommen – Widgets lassen sich direkt im Vorschaufenster
+          per Drag &amp; Drop verschieben (Position wird sofort gespeichert).
         </p>
         <div class="segmented" id="preview_context_seg">
           <button type="button" data-value="media">Mit Medien</button>
           <button type="button" data-value="empty">Ohne Medien</button>
         </div>
+        <div class="segmented" id="preview_lang_seg">
+          <button type="button" data-value="de">Deutsch</button>
+          <button type="button" data-value="en">English</button>
+        </div>
         <div class="preview-wrap">
           <div class="preview-screen" id="preview-screen">
-            <div class="preview-app-name">Digital Signage</div>
-            <div class="preview-clock" id="preview-clock">
-              <span class="preview-time">--:--:--</span>
-              <span class="preview-date">Montag, 03.08.2026</span>
+            <!-- Große Uhr-Ansicht (Leerzustand / Interstitial) -->
+            <div class="clock-screen embedded hidden" id="preview-clock-screen">
+              <div class="clock-screen-block" id="preview-clock-block">
+                <span class="clock-big"></span>
+                <span class="clock-big-date"></span>
+              </div>
+              <div class="app-name">Digital Signage</div>
             </div>
-            <div class="preview-weather" id="preview-weather"></div>
+
+            <!-- Uhr-Widget während der Medienwiedergabe -->
+            <div class="widget-clock clock-auto embedded hidden" id="preview-clock">
+              <span class="clock-time"></span>
+              <span class="clock-date"></span>
+            </div>
+
+            <!-- Wetter-Widget -->
+            <div class="widget-weather weather-large weather-auto embedded hidden" id="preview-weather"></div>
           </div>
         </div>
         <div class="row-btns">

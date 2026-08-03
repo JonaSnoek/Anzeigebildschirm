@@ -14,6 +14,7 @@
   <link rel="apple-touch-icon" href="{{ url_for('static', filename='icons/icon-180.png') }}">
   <title>{% block title %}{{ site_name }}{% endblock %}</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/widgets.css') }}">
   <link rel="icon" href="data:,">
 </head>
 <body>
@@ -69,6 +70,7 @@
     </main>
   </div>
 
+  <script src="{{ url_for('static', filename='js/widgets.js') }}"></script>
   <script src="{{ url_for('static', filename='js/admin.js') }}"></script>
   <script>
     if ("serviceWorker" in navigator) {

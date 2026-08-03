@@ -29,7 +29,7 @@ ALLOWED = {
     "clock_mode": ("choice", ["auto", "custom"]),
     "clock_x": ("int", 0, 100),
     "clock_y": ("int", 0, 100),
-    "clock_size_pct": ("int", 30, 300),
+    "clock_size_pct": ("int", 30, 600),
     "clock_interstitial": ("bool",),
 
     # Wetter-Widget
@@ -39,7 +39,7 @@ ALLOWED = {
     "weather_mode": ("choice", ["auto", "custom"]),
     "weather_x": ("int", 0, 100),
     "weather_y": ("int", 0, 100),
-    "weather_size_pct": ("int", 30, 300),
+    "weather_size_pct": ("int", 30, 600),
 }
 
 
