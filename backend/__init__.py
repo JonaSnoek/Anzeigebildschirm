@@ -57,6 +57,11 @@ def _migrate_schema() -> None:
             db.text("ALTER TABLE media ADD COLUMN active BOOLEAN NOT NULL DEFAULT 1")
         )
         db.session.commit()
+    if "duration" not in columns:
+        db.session.execute(
+            db.text("ALTER TABLE media ADD COLUMN duration FLOAT NOT NULL DEFAULT 0")
+        )
+        db.session.commit()
 
     # Veraltete Einstellungsschlüssel entfernen (durch Slider-Konfiguration
     # mit Größe in Prozent und X/Y-Position ersetzt).

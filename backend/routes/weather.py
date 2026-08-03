@@ -40,6 +40,9 @@ def refresh_weather():
         data = weather.get_weather(city, force=True)
     except Exception as exc:  # noqa: BLE001 – alle Netzwerk-/API-Fehler abfangen
         return jsonify({"error": f"Wetter konnte nicht abgerufen werden: {exc}"}), 502
+    from ..events import notify_display
+
+    notify_display()
     return jsonify({"ok": True, "weather": data})
 
 
@@ -52,4 +55,7 @@ def save_weather():
         result = weather.save_manual(data)
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 400
+    from ..events import notify_display
+
+    notify_display()
     return jsonify({"ok": True, "weather": result})

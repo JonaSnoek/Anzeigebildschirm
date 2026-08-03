@@ -385,6 +385,7 @@ if (settingsForm) {
   const previewClockBlock = document.getElementById("preview-clock-block");
   const previewClock = document.getElementById("preview-clock");
   const previewWeather = document.getElementById("preview-weather");
+  const previewMedia = document.getElementById("preview-media");
   const previewContext = { value: "media" };
 
   const weatherPreviewState = {
@@ -478,8 +479,92 @@ if (settingsForm) {
     previewWeather.innerHTML = Signage.weatherMarkup(weatherPreviewData(), display, lang);
 
     updatePreviewClock();
+    updateLiveMedia();
     updateSliderFill();
   }
+
+  /* ---------- Live-Medien (SSE, identisch mit Display) ---------- */
+  const liveState = { timeline: null };
+  let liveSkew = 0;
+  let liveMediaKey = null;
+
+  function liveNow() {
+    return Date.now() / 1000 + liveSkew;
+  }
+
+  function liveSlot() {
+    const tl = liveState.timeline;
+    if (!tl || !tl.items || tl.items.length === 0) return null;
+    const t = liveNow();
+    if (!tl.loop && t >= tl.cycle_start + tl.cycle_duration) return null;
+    const phase = (((t - tl.cycle_start) % tl.cycle_duration) + tl.cycle_duration) % tl.cycle_duration;
+    for (const item of tl.items) {
+      if (phase >= item.start && phase < item.end) return item;
+    }
+    return tl.items[tl.items.length - 1];
+  }
+
+  function updateLiveMedia() {
+    if (!previewMedia) return;
+    const mediaMode = previewContext.value === "media";
+    const slot = mediaMode ? liveSlot() : null;
+    if (!mediaMode || !slot) {
+      previewMedia.innerHTML = "";
+      liveMediaKey = null;
+      return;
+    }
+    if (slot.type === "clock") {
+      previewMedia.innerHTML = "";
+      liveMediaKey = null;
+      previewClockScreen.classList.remove("hidden");
+      updatePreviewClock();
+      return;
+    }
+    previewClockScreen.classList.add("hidden");
+    const key = slot.type + ":" + slot.id;
+    if (key === liveMediaKey) {
+      const video = previewMedia.querySelector("video");
+      if (slot.type === "video" && video && video.paused && !video.ended) {
+        video.play().catch(function () {});
+      }
+      return;
+    }
+    liveMediaKey = key;
+    if (slot.type === "image") {
+      previewMedia.innerHTML = '<img src="' + slot.url + '" alt="">';
+    } else {
+      const progress = Math.max(0, liveNow() - (liveState.timeline.cycle_start + slot.start));
+      previewMedia.innerHTML =
+        '<video src="' + slot.url + '" muted playsinline autoplay preload="metadata"></video>';
+      const video = previewMedia.querySelector("video");
+      video.addEventListener("loadedmetadata", () => {
+        try {
+          if (progress > 0.5 && progress < video.duration - 0.5) video.currentTime = progress;
+        } catch (err) {}
+        video.play().catch(function () {});
+      });
+    }
+  }
+
+  const liveSource = new EventSource("/api/events");
+  liveSource.addEventListener("state", (event) => {
+    try {
+      const message = JSON.parse(event.data);
+      if (typeof message.ts === "number") liveSkew = message.ts - Date.now() / 1000;
+      if (message.data && message.data.timeline) liveState.timeline = message.data.timeline;
+      updateLiveMedia();
+    } catch (err) {}
+  });
+  liveSource.onerror = function () {};
+  setInterval(updateLiveMedia, 1000);
+  fetch("/api/display", { cache: "no-store" })
+    .then((res) => res.json())
+    .then((data) => {
+      if (typeof data.server_time === "number") liveSkew = data.server_time - Date.now() / 1000;
+      if (data && data.timeline) liveState.timeline = data.timeline;
+      updateLiveMedia();
+    })
+    .catch(function () {});
 
   function updatePreviewClock() {
     const now = new Date();

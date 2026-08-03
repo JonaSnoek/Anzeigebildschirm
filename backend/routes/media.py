@@ -8,6 +8,7 @@ from sqlalchemy import func, select
 
 from ..config import Config
 from ..database import db
+from ..events import notify_display
 from ..models import Media
 from ..security import roles_required
 from ..services.media import delete_media_file, handle_upload, replace_file
@@ -59,6 +60,7 @@ def upload():
     media, error = handle_upload(file)
     if error:
         return jsonify({"error": error}), 400
+    notify_display()
     return jsonify({"ok": True, "item": media.to_dict(), "counts": _counts()})
 
 
@@ -72,6 +74,7 @@ def delete(media_id):
     delete_media_file(media)
     db.session.delete(media)
     db.session.commit()
+    notify_display()
     return jsonify({"ok": True, "counts": _counts()})
 
 
@@ -89,6 +92,7 @@ def rename(media_id):
         return jsonify({"error": "Der Name darf nicht leer sein."}), 400
     media.name = name[:200]
     db.session.commit()
+    notify_display()
     return jsonify({"ok": True, "item": media.to_dict()})
 
 
@@ -112,6 +116,7 @@ def set_active(media_id):
     else:
         media.active = not media.active
     db.session.commit()
+    notify_display()
     return jsonify({"ok": True, "item": media.to_dict()})
 
 
@@ -127,6 +132,7 @@ def replace(media_id):
     new_media, error = replace_file(media, file)
     if error:
         return jsonify({"error": error}), 400
+    notify_display()
     return jsonify({"ok": True, "item": new_media.to_dict()})
 
 
@@ -141,4 +147,5 @@ def reorder():
         if media is not None:
             media.sort_order = position
     db.session.commit()
+    notify_display()
     return jsonify({"ok": True})

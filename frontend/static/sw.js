@@ -12,7 +12,7 @@
 
 "use strict";
 
-const VERSION = "v2";
+const VERSION = "v3";
 const CACHE = "anzeige-" + VERSION;
 
 const PRECACHE = [
@@ -60,6 +60,9 @@ self.addEventListener("fetch", (event) => {
   if (url.origin !== self.location.origin) return;
 
   const path = url.pathname;
+
+  // SSE-Stream niemals anfassen (kein Caching, keine Wiederverbindung durch SW)
+  if (path === "/api/events") return;
 
   // Geschützte Bereiche niemals cachen
   if (

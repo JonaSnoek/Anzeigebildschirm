@@ -10,7 +10,7 @@ Datenbank-Modelle.
 from datetime import datetime, timezone
 
 import bcrypt
-from sqlalchemy import Boolean, DateTime, Integer, String, Text
+from sqlalchemy import Boolean, DateTime, Float, Integer, String, Text
 
 from .database import db
 
@@ -71,6 +71,7 @@ class Media(db.Model):
     stored_name = db.Column(String(200), nullable=False, unique=True)  # Dateiname auf Platte
     mime_type = db.Column(String(120), nullable=False, default="application/octet-stream")
     size_bytes = db.Column(Integer, nullable=False, default=0)
+    duration = db.Column(Float, nullable=False, default=0.0)  # Videos: Sekunden
     sort_order = db.Column(Integer, nullable=False, default=0, index=True)
     active = db.Column(Boolean, nullable=False, default=True, index=True)
     created_at = db.Column(DateTime, nullable=False, default=_utcnow)
@@ -84,6 +85,7 @@ class Media(db.Model):
             "url": f"/media/{self.type}/{self.stored_name}",
             "mime_type": self.mime_type,
             "size_bytes": self.size_bytes,
+            "duration": self.duration or 0.0,
             "sort_order": self.sort_order,
             "active": self.active,
             "created_at": self.created_at.isoformat() if self.created_at else None,

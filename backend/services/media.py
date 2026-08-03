@@ -10,6 +10,8 @@ Sicherheitsaspekte:
 """
 
 import mimetypes
+import shutil
+import subprocess
 import uuid
 from pathlib import Path
 
@@ -18,6 +20,30 @@ from sqlalchemy import func, select
 from ..config import BASE_DIR, Config
 from ..database import db
 from ..models import Media
+
+
+def _probe_duration(path: Path) -> float:
+    """
+    Ermittelt die Dauer einer Videodatei (Sekunden) über ffprobe, falls
+    verfügbar. Liefert 0.0, wenn die Dauer nicht ermittelt werden kann –
+    dann meldet der erste Anzeige-Client die echte Länge zurück.
+    """
+    if not shutil.which("ffprobe"):
+        return 0.0
+    try:
+        result = subprocess.run(
+            [
+                "ffprobe", "-v", "error", "-show_entries", "format=duration",
+                "-of", "default=noprint_wrappers=1:nokey=1", str(path),
+            ],
+            capture_output=True,
+            text=True,
+            timeout=20,
+        )
+        value = float(result.stdout.strip())
+        return round(value, 2) if value > 0 else 0.0
+    except (OSError, subprocess.SubprocessError, ValueError):
+        return 0.0
 
 
 def _classify(filename: str):
@@ -95,6 +121,7 @@ def handle_upload(file_storage) -> tuple[Media | None, str | None]:
             or "application/octet-stream"
         ),
         size_bytes=destination.stat().st_size,
+        duration=_probe_duration(destination) if media_type == "video" else 0.0,
         sort_order=int(max_order) + 1,
     )
     db.session.add(media)
@@ -123,6 +150,7 @@ def replace_file(media: Media, file_storage) -> tuple[Media | None, str | None]:
         or "application/octet-stream"
     )
     media.size_bytes = destination.stat().st_size
+    media.duration = _probe_duration(destination) if media_type == "video" else 0.0
     db.session.commit()
     return media, None
 

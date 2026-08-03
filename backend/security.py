@@ -28,6 +28,9 @@ def get_csrf_token() -> str:
 def validate_csrf() -> None:
     """Globaler before_request-Hook: prüft CSRF bei allen Schreiboperationen."""
     if request.method in {"POST", "PUT", "PATCH", "DELETE"}:
+        # Öffentliche Anzeige-Geräte melden die Videodauer ohne Login/CSRF.
+        if request.endpoint == "public.report_video_duration":
+            return
         token = request.form.get("_csrf_token") or request.headers.get("X-CSRF-Token")
         if not token or not secrets.compare_digest(token, session.get("_csrf", "")):
             abort(400, description="Ungültiges oder fehlendes CSRF-Token.")

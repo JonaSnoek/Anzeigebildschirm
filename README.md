@@ -57,8 +57,18 @@ Wiedergabe und Benutzer über ein dunkles, modernes Dashboard.
 - **PWA / installierbar** (Windows, macOS, Linux, iOS, Android): als App
   auf den Homescreen/Desktop legen, **offline-fähig** (Anzeige + zuletzt
   geladene Medien bleiben ohne Internet sichtbar)
+- **Echtzeit-Synchronisation** aller Anzeigen über **Server-Sent Events (SSE)**:
+  Änderungen an Medien, Einstellungen oder Wetter erscheinen innerhalb weniger
+  Sekunden auf **allen** geöffneten Geräten – manuelles Neuladen (F5) ist nie
+  nötig
+- **Zentrale Wiedergabe-Timeline**: Der Server gibt Reihenfolge, Position und
+  Anzeigedauer zentral vor. Alle Geräte zeigen zur selben Zeit dasselbe Medium
+  (reine Funktion der Serverzeit), neue Geräte steigen mittendrin ein
+- **Ohne Branding**: Die Anzeige zeigt ausschließlich Medien, Uhr, Wetter und
+  Widgets – kein Titel, kein Logo, keine Bedienelemente
 - **Medien einzeln ein-/ausblenden** (pro Datei, ohne Löschen)
-- Erkennt automatisch neue/geänderte Medien (aktualisiert sich alle 30 s)
+- Videodauer wird automatisch ermittelt (ffprobe) und/oder von den Geräten
+  zurückgemeldet, damit die Timeline exakt synchron bleibt
 
 ### Anmeldung (`/login`)
 - Modernes Login mit Benutzername + Passwort
@@ -75,7 +85,9 @@ Wiedergabe und Benutzer über ein dunkles, modernes Dashboard.
   Größe per Schieberegler bis 600 %, Position automatisch oder per
   **Drag & Drop** in der Vorschau, wird sofort gespeichert) – mit
   **Live-Vorschau**, die exakt wie die Anzeige rendert (gleiche Symbole,
-  Übersetzungen, Zustände) und jede Änderung in Echtzeit zeigt
+  Übersetzungen, Zustände) und **dieselben Echtzeitdaten** nutzt
+  (SSE-Stream): Das aktuell laufende Medium der Anzeige erscheint
+  live in der Vorschau
 - **Wetterdaten:** automatisch abrufen (Open-Meteo) oder **manuell pflegen**
   (Wetterzustand + Temperatur pro Tag, Symbol wird automatisch angezeigt)
 - **Benutzerverwaltung:** Benutzer anlegen/löschen, Passwort ändern,
@@ -108,14 +120,16 @@ Wiedergabe und Benutzer über ein dunkles, modernes Dashboard.
 anzeige/
 ├── backend/                    # Flask-Backend
 │   ├── routes/                 #   URL-Routen (modular, je ein Bereich)
-│   │   ├── public.py           #     Anzeigebildschirm (öffentlich)
+│   │   ├── public.py           #     Anzeigebildschirm, /api/display, SSE, Medien
 │   │   ├── auth.py             #     Login / Logout
 │   │   ├── dashboard.py        #     Übersicht
 │   │   ├── media.py            #     Medienverwaltung
 │   │   ├── settings.py         #     Wiedergabe-Einstellungen
 │   │   ├── weather.py          #     Wetterdaten (öffentlich + Admin)
 │   │   └── users.py            #     Benutzerverwaltung
-│   ├── services/               #   Geschäftslogik (Media, Settings, Weather)
+│   ├── services/               #   Geschäftslogik (Media, Settings, Weather, Display)
+│   │   └── display.py          #     Zentrale Timeline + Anzeige-Zustand
+│   ├── events.py               #   SSE-Pub/Sub-Hub + notify_display()
 │   ├── __init__.py             #   App-Factory
 │   ├── config.py               #   Konfiguration (Umgebungsvariablen)
 │   ├── database.py             #   Datenbank-Objekt
@@ -124,8 +138,8 @@ anzeige/
 │   └── wsgi.py                 #   WSGI-Entrypoint
 ├── frontend/                   # Web-Frontend
 │   ├── static/
-│   │   ├── css/                #   style.css (Admin), display.css (Anzeige)
-│   │   ├── js/                 #   admin.js, display.js
+│   │   ├── css/                #   style.css (Admin), display.css, widgets.css (Anzeige)
+│   │   ├── js/                 #   admin.js, display.js, widgets.js (gemeinsame Engine)
 │   │   ├── icons/              #   PWA-Icons (192/512/maskable/180)
 │   │   ├── manifest.json       #   PWA-Manifest
 │   │   └── sw.js               #   Service Worker (Offline)
@@ -409,7 +423,9 @@ cd /home/ubuntu/anzeige
 | GET     | `/`                                    | öffentlich           | Anzeigebildschirm            |
 | GET     | `/sw.js`                               | öffentlich           | Service Worker (PWA)         |
 | GET     | `/static/manifest.json`                | öffentlich           | PWA-Manifest                 |
-| GET     | `/api/display`                         | öffentlich           | Daten für den Player (Medien + Uhr/Wetter-Einstellungen) |
+| GET     | `/api/display`                         | öffentlich           | Daten + zentrale Timeline für den Player (Serverzeit inklusive) |
+| GET     | `/api/events`                          | öffentlich           | Echtzeit-Stream (SSE): sofortiger Zustand, danach bei jeder Änderung |
+| POST    | `/api/display/report`                  | öffentlich (CSRF-frei) | Anzeigen melden die tatsächliche Videodauer zurück |
 | GET     | `/media/<typ>/<datei>`                 | öffentlich           | Medien ausliefern            |
 | GET     | `/api/weather`                         | öffentlich           | Wetterdaten + Widget-Einstellungen |
 | POST    | `/login` · `/logout`                   | –                    | An-/Abmeldung                |
@@ -436,7 +452,9 @@ cd /home/ubuntu/anzeige
 - **Sessions:** serverseitig, HttpOnly, SameSite=Lax; `COOKIE_SECURE=true`
   hinter HTTPS empfohlen
 - **CSRF:** Token bei jeder Schreiboperation (Formularfeld oder
-  `X-CSRF-Token`-Header)
+  `X-CSRF-Token`-Header). Bewusste Ausnahme: `POST /api/display/report`
+  ist öffentlich und CSRF-frei, da Anzeigegeräte ohne Login die
+  Videodauer zurückmelden müssen
 - **Uploads:**
   - Whitelist der Dateiendungen (keine ausführbaren Formate)
   - Größenlimits (Bilder 20 MB, Videos 500 MB, Audio 100 MB)

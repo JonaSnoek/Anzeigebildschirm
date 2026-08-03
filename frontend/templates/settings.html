@@ -225,13 +225,15 @@
         </div>
         <div class="preview-wrap">
           <div class="preview-screen" id="preview-screen">
+            <!-- Aktuell laufendes Medium (Live vom Server, via SSE) -->
+            <div class="preview-media" id="preview-media"></div>
+
             <!-- Große Uhr-Ansicht (Leerzustand / Interstitial) -->
             <div class="clock-screen embedded hidden" id="preview-clock-screen">
               <div class="clock-screen-block" id="preview-clock-block">
                 <span class="clock-big"></span>
                 <span class="clock-big-date"></span>
               </div>
-              <div class="app-name">Digital Signage</div>
             </div>
 
             <!-- Uhr-Widget während der Medienwiedergabe -->

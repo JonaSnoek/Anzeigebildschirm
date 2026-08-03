@@ -34,4 +34,7 @@ def save_settings():
         result = update_settings(data)
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 400
+    from ..events import notify_display
+
+    notify_display()
     return jsonify({"ok": True, "settings": result})

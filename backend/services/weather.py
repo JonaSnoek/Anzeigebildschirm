@@ -208,6 +208,18 @@ def get_weather(city: str = "", force: bool = False) -> dict:
     return _empty(city)
 
 
+def get_weather_snapshot(city: str = "") -> dict:
+    """
+    Liefert die zuletzt gespeicherten Wetterdaten, OHNE das Netzwerk zu
+    kontaktieren. Wird für Echtzeit-Broadcasts verwendet, damit diese nie
+    durch einen langsamen Wetter-Abruf verzögert werden.
+    """
+    row = _first_row()
+    if row is not None:
+        return row.to_dict()
+    return _empty(city)
+
+
 def save_manual(data: dict) -> dict:
     """Speichert vom Admin manuell eingegebene Wetterdaten."""
     def _pick(section, key, default=""):
