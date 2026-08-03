@@ -151,13 +151,15 @@ class WeatherData(db.Model):
 
         ``state`` ist der sprachunabhängige Zustands-Schlüssel (z. B. ``sun``,
         ``cloud``, ``showers``). ``icon`` bleibt als Abwärtskompatibilität.
-        Höchst-/Mindesttemperatur fallen auf die aktuelle Temperatur zurück,
-        falls keine Tageswerte vorhanden sind (z. B. alte oder manuelle Daten).
+        Die Höchsttemperatur fällt auf die aktuelle Temperatur zurück, falls
+        kein Tageshöchstwert vorhanden ist. Die Mindesttemperatur tut das
+        bewusst NICHT: Liegt kein Tiefstwert vor, bleibt sie leer (Anzeige
+        „--“), damit Höchst- und Mindesttemperatur nie dieselbe Zahl zeigen.
         """
         def _day(prefix: str) -> dict:
             temp = getattr(self, prefix + "_temp")
             temp_max = getattr(self, prefix + "_temp_max") or temp
-            temp_min = getattr(self, prefix + "_temp_min") or temp
+            temp_min = getattr(self, prefix + "_temp_min") or ""
             icon = getattr(self, prefix + "_icon")
             return {
                 "temp": temp,

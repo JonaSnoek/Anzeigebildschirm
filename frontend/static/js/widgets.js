@@ -132,8 +132,10 @@ window.Signage = (function () {
     const card = (label, section) => {
       const s = section || {};
       const state = s.state || s.icon || "cloud";
+      // Max fällt auf die aktuelle Temperatur zurück; Min NIE (sonst stünde
+      // bei beiden dieselbe Zahl – die Anzeige zeigt dann „--“).
       const max = s.temp_max || s.temp || "";
-      const min = s.temp_min || s.temp || "";
+      const min = s.temp_min || "";
       return `
       <div class="weather-card weather-${label}">
         <div class="weather-head">

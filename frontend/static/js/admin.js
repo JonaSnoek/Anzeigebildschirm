@@ -747,20 +747,20 @@ if (settingsForm) {
     };
     setState("today", today.state || today.icon || "sun");
     setState("tomorrow", tomorrow.state || tomorrow.icon || "cloud-sun");
-    tempInputs.todayMax.value = today.temp_max || "";
+    tempInputs.todayMax.value = today.temp_max || today.temp || "";
     tempInputs.todayMin.value = today.temp_min || "";
-    tempInputs.tomorrowMax.value = tomorrow.temp_max || "";
+    tempInputs.tomorrowMax.value = tomorrow.temp_max || tomorrow.temp || "";
     tempInputs.tomorrowMin.value = tomorrow.temp_min || "";
     weatherPreviewState.today = {
       icon: stateSelects.today.value,
       temp_max: today.temp_max || today.temp || "",
-      temp_min: today.temp_min || today.temp || "",
+      temp_min: today.temp_min || "",
       course: today.course || [],
     };
     weatherPreviewState.tomorrow = {
       icon: stateSelects.tomorrow.value,
       temp_max: tomorrow.temp_max || tomorrow.temp || "",
-      temp_min: tomorrow.temp_min || tomorrow.temp || "",
+      temp_min: tomorrow.temp_min || "",
       course: tomorrow.course || [],
     };
     updateIconPreviews();
