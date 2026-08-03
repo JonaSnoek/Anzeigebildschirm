@@ -127,7 +127,11 @@ class WeatherData(db.Model):
     tomorrow_icon = db.Column(String(32), nullable=False, default="")
 
     def to_dict(self) -> dict:
-        """Serielles Format für die API."""
+        """Serielles Format für die API.
+
+        ``state`` ist der sprachunabhängige Zustands-Schlüssel (z. B. ``sun``,
+        ``cloud``, ``showers``). ``icon`` bleibt als Abwärtskompatibilität.
+        """
         return {
             "location": self.location,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
@@ -135,10 +139,12 @@ class WeatherData(db.Model):
                 "temp": self.today_temp,
                 "desc": self.today_desc,
                 "icon": self.today_icon,
+                "state": self.today_icon,
             },
             "tomorrow": {
                 "temp": self.tomorrow_temp,
                 "desc": self.tomorrow_desc,
                 "icon": self.tomorrow_icon,
+                "state": self.tomorrow_icon,
             },
         }

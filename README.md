@@ -20,13 +20,14 @@ Wiedergabe und Benutzer über ein dunkles, modernes Dashboard.
 6. [Docker (optional)](#docker-optional)
 7. [Konfiguration (.env)](#konfiguration-env)
 8. [Kiosk-Modus am Monitor](#kiosk-modus-am-monitor)
-9. [Benutzer und Rollen](#benutzer-und-rollen)
-10. [API-Übersicht](#api-übersicht)
-11. [Sicherheit](#sicherheit)
-12. [Erweiterbarkeit / neue Module](#erweiterbarkeit--neue-module)
-13. [Umstellung auf MariaDB](#umstellung-auf-mariadb)
-14. [Fehlerbehebung](#fehlerbehebung)
-15. [Lizenz](#lizenz)
+9. [PWA: Installieren & Offline](#pwa-installieren--offline)
+10. [Benutzer und Rollen](#benutzer-und-rollen)
+11. [API-Übersicht](#api-übersicht)
+12. [Sicherheit](#sicherheit)
+13. [Erweiterbarkeit / neue Module](#erweiterbarkeit--neue-module)
+14. [Umstellung auf MariaDB](#umstellung-auf-mariadb)
+15. [Fehlerbehebung](#fehlerbehebung)
+16. [Lizenz](#lizenz)
 
 ---
 
@@ -50,6 +51,12 @@ Wiedergabe und Benutzer über ein dunkles, modernes Dashboard.
   oder manuell gepflegt; **zwei Darstellungen** (klein: Symbol + Temperatur,
   groß: Überschrift, großes Symbol, Beschreibung), Größe und Position wie
   bei der Uhr frei einstellbar
+- **Zweisprachig** (🇩🇪 Deutsch / 🇬🇧 Englisch): Wochentage, „Heute"/„Morgen"
+  und Wetterzustände werden in der gewählten Sprache angezeigt – Wechsel
+  per Sprach-Schalter auf der Anzeige, **ohne Neuladen**
+- **PWA / installierbar** (Windows, macOS, Linux, iOS, Android): als App
+  auf den Homescreen/Desktop legen, **offline-fähig** (Anzeige + zuletzt
+  geladene Medien bleiben ohne Internet sichtbar)
 - **Medien einzeln ein-/ausblenden** (pro Datei, ohne Löschen)
 - Erkennt automatisch neue/geänderte Medien (aktualisiert sich alle 30 s)
 
@@ -117,7 +124,10 @@ anzeige/
 ├── frontend/                   # Web-Frontend
 │   ├── static/
 │   │   ├── css/                #   style.css (Admin), display.css (Anzeige)
-│   │   └── js/                 #   admin.js, display.js
+│   │   ├── js/                 #   admin.js, display.js
+│   │   ├── icons/              #   PWA-Icons (192/512/maskable/180)
+│   │   ├── manifest.json       #   PWA-Manifest
+│   │   └── sw.js               #   Service Worker (Offline)
 │   └── templates/              #   HTML-Templates (Jinja2)
 ├── uploads/                    # Hochgeladene Medien
 │   ├── images/
@@ -331,6 +341,43 @@ chromium --kiosk --noerrdialogs --disable-infobars \
 
 ---
 
+## PWA: Installieren & Offline
+
+Die Anzeige ist eine **Progressive Web App (PWA)**: Sie lässt sich auf jedem
+Gerät als Vollbild-App installieren und funktioniert teilweise **ohne
+Internet**.
+
+### Auf dem Gerät installieren
+
+- **Windows/macOS/Linux (Chromium/Edge/Chrome):** Anzeige öffnen
+  (`http://<ip>:5000/`), in der Adressleiste das Installations-Symbol
+  (PC-Monitor) wählen.
+- **iOS (Safari):** „Teilen“ → „Zum Home-Bildschirm“.
+- **Android (Chrome):** Menü → „Zum Startbildschirm hinzufügen“ / „App installieren“.
+
+So läuft die Anzeige im Vollbild ohne Adressleiste (Kiosk-Ersatz, z. B.
+`chromium --kiosk` ist dann nicht mehr nötig).
+
+### Was offline funktioniert
+
+- Startseite, Design und Skripte sind im Cache vorgeladen.
+- `/api/display` und `/api/weather` werden als Netzwerk-zuerst gecacht:
+  ohne Internet wird der **letzte Stand** angezeigt.
+- Bereits geladene Medien werden beim Abspielen mitgecacht und bleiben
+  offline abspielbar.
+- Der **Admin-Bereich wird nie gecacht** (Login/Session bleiben serverseitig
+  geschützt).
+
+### Sprache wechseln
+
+Der Sprach-Schalter **DE/EN** (unten links auf der Anzeige) wechselt
+Wochentage, Datum und Wettertexte **sofort ohne Neuladen**. Die Auswahl wird
+im Browser gespeichert (`localStorage`) und beim nächsten Öffnen übernommen.
+Weitere Sprachen lassen sich ohne Admin-Änderung ergänzen (im
+`I18N`-Objekt von `frontend/static/js/display.js`).
+
+---
+
 ## Benutzer und Rollen
 
 | Rolle | Rechte                                                        |
@@ -359,6 +406,8 @@ cd /home/ubuntu/anzeige
 | Methode | Pfad                                   | Zugriff              | Zweck                        |
 |---------|----------------------------------------|----------------------|------------------------------|
 | GET     | `/`                                    | öffentlich           | Anzeigebildschirm            |
+| GET     | `/sw.js`                               | öffentlich           | Service Worker (PWA)         |
+| GET     | `/static/manifest.json`                | öffentlich           | PWA-Manifest                 |
 | GET     | `/api/display`                         | öffentlich           | Daten für den Player (Medien + Uhr/Wetter-Einstellungen) |
 | GET     | `/media/<typ>/<datei>`                 | öffentlich           | Medien ausliefern            |
 | GET     | `/api/weather`                         | öffentlich           | Wetterdaten + Widget-Einstellungen |

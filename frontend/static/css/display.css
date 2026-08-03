@@ -251,3 +251,55 @@ body {
 .weather-large .weather-desc { opacity: .85; font-size: .95em; }
 .weather-large .weather-day { display: none; }
 
+/* ---------- Safe Areas (Notch / Home-Indikator) ---------- */
+.app-name { top: calc(3vh + env(safe-area-inset-top)); }
+
+#clock-widget.clock-auto {
+  right: calc(32px + env(safe-area-inset-right));
+  bottom: calc(26px + env(safe-area-inset-bottom));
+}
+
+.weather-widget.weather-auto {
+  top: calc(24px + env(safe-area-inset-top));
+  right: calc(24px + env(safe-area-inset-right));
+}
+
+/* ---------- Sprachumschalter ---------- */
+.lang-toggle {
+  position: fixed;
+  left: calc(18px + env(safe-area-inset-left));
+  bottom: calc(18px + env(safe-area-inset-bottom));
+  z-index: 100;
+  min-width: 44px;
+  min-height: 44px;
+  padding: .4rem .7rem;
+  border: 1px solid rgba(255, 255, 255, .22);
+  border-radius: 999px;
+  background: rgba(10, 14, 22, .5);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  color: rgba(255, 255, 255, .9);
+  font-family: inherit;
+  font-size: .85rem;
+  font-weight: 600;
+  letter-spacing: .05em;
+  cursor: pointer;
+  opacity: .35;
+  transition: opacity .25s, border-color .25s;
+}
+
+.lang-toggle:hover,
+.lang-toggle:focus-visible {
+  opacity: 1;
+  border-color: rgba(56, 189, 248, .8);
+  outline: none;
+}
+
+/* ---------- Kleinere Bildschirme ---------- */
+@media (max-width: 700px), (max-height: 500px) {
+  .lang-toggle {
+    opacity: .5;
+    padding: .3rem .55rem;
+  }
+}
+

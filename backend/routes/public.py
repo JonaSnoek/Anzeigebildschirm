@@ -5,7 +5,7 @@ Diese Routen benötigen KEINEN Login, da der Anzeigebildschirm für Besucher
 öffentlich zugänglich sein muss.
 """
 
-from flask import Blueprint, abort, jsonify, render_template, send_from_directory
+from flask import Blueprint, abort, current_app, jsonify, render_template, send_from_directory
 
 from ..config import BASE_DIR, Config
 from ..database import db
@@ -20,6 +20,16 @@ bp = Blueprint("public", __name__)
 def display():
     """Öffentlicher Anzeigebildschirm (Vollbildseite)."""
     return render_template("display.html")
+
+
+@bp.get("/sw.js")
+def service_worker():
+    """Service Worker für die PWA (muss am Root liegen, damit die ganze
+    Anwendung im Scope liegt und offline funktioniert)."""
+    response = send_from_directory(current_app.static_folder, "sw.js")
+    response.headers["Content-Type"] = "application/javascript"
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    return response
 
 
 @bp.get("/api/display")

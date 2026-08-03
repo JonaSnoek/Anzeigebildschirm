@@ -6,8 +6,9 @@ Open-Meteo-API (kein API-Schlüssel nötig) und cacht sie in der
 Tabelle ``weather_data``. Ist kein Internet verfügbar, werden zuletzt
 gespeicherte (oder manuell gepflegte) Werte verwendet.
 
-Icons sind kurze Schlüssel wie "sun" oder "rain"; die Darstellung als
-SVG übernimmt das Frontend.
+Zustandswerte sind kurze, sprachunabhängige Schlüssel wie "sun" oder
+"showers"; die Darstellung als Symbol und die Übersetzung übernimmt das
+Frontend der Anzeige.
 """
 
 import json
@@ -24,7 +25,11 @@ from ..models import WeatherData
 OPEN_METEO_GEO = "https://geocoding-api.open-meteo.com/v1/search"
 OPEN_METEO_FORECAST = "https://api.open-meteo.com/v1/forecast"
 
-# WMO-Wettercode -> (deutsche Beschreibung, Icon-Schlüssel)
+# WMO-Wettercode -> (deutsche Beschreibung, Zustands-Schlüssel)
+#
+# Der Zustands-Schlüssel ist sprachunabhängig (z. B. "rain", "showers") und
+# wird an der Anzeige in die gewählte Sprache übersetzt. Der Administrator
+# wählt im Admin-Bereich (deutsch) nur den Zustand aus.
 WMO = {
     0: ("Klar", "sun"),
     1: ("Überwiegend sonnig", "sun"),
@@ -46,9 +51,9 @@ WMO = {
     73: ("Schneefall", "snow"),
     75: ("Starker Schneefall", "snow"),
     77: ("Schneegriesel", "snow"),
-    80: ("Regenschauer", "rain"),
-    81: ("Regenschauer", "rain"),
-    82: ("Kräftige Regenschauer", "rain"),
+    80: ("Regenschauer", "showers"),
+    81: ("Regenschauer", "showers"),
+    82: ("Kräftige Regenschauer", "showers"),
     85: ("Schneeschauer", "snow"),
     86: ("Schneeschauer", "snow"),
     95: ("Gewitter", "storm"),
@@ -65,7 +70,7 @@ def _http_get_json(url: str, params: dict):
 
 
 def _describe(code) -> tuple[str, str]:
-    """Übersetzt einen WMO-Code in (Beschreibung, Icon-Schlüssel)."""
+    """Übersetzt einen WMO-Code in (Beschreibung, Zustands-Schlüssel)."""
     try:
         return WMO.get(int(code), ("Unbekannt", "cloud"))
     except (TypeError, ValueError):
@@ -101,8 +106,8 @@ def _fetch(city: str) -> dict:
     daily = data.get("daily", {})
     codes = daily.get("weather_code") or []
 
-    today_desc, today_icon = _describe(current.get("weather_code"))
-    tomorrow_desc, tomorrow_icon = _describe(codes[1] if len(codes) > 1 else 0)
+    today_desc, today_state = _describe(current.get("weather_code"))
+    tomorrow_desc, tomorrow_state = _describe(codes[1] if len(codes) > 1 else 0)
 
     def _round(value, fallback="") -> str:
         try:
@@ -115,7 +120,7 @@ def _fetch(city: str) -> dict:
         "today": {
             "temp": _round(current.get("temperature_2m")),
             "desc": today_desc,
-            "icon": today_icon,
+            "state": today_state,
         },
         "tomorrow": {
             "temp": _round(
@@ -124,7 +129,7 @@ def _fetch(city: str) -> dict:
                 else None
             ),
             "desc": tomorrow_desc,
-            "icon": tomorrow_icon,
+            "state": tomorrow_state,
         },
     }
 
@@ -147,10 +152,10 @@ def _store(data: dict) -> WeatherData:
     row.updated_at = datetime.now(timezone.utc)
     row.today_temp = data["today"]["temp"]
     row.today_desc = data["today"]["desc"][:120]
-    row.today_icon = data["today"]["icon"][:32]
+    row.today_icon = (data["today"].get("state") or data["today"].get("icon") or "")[:32]
     row.tomorrow_temp = data["tomorrow"]["temp"]
     row.tomorrow_desc = data["tomorrow"]["desc"][:120]
-    row.tomorrow_icon = data["tomorrow"]["icon"][:32]
+    row.tomorrow_icon = (data["tomorrow"].get("state") or data["tomorrow"].get("icon") or "")[:32]
     db.session.commit()
     return row
 
@@ -209,17 +214,21 @@ def save_manual(data: dict) -> dict:
         value = (data.get(section) or {}).get(key)
         return default if value is None else str(value).strip()[:120]
 
+    def _state(section):
+        value = _pick(section, "state") or _pick(section, "icon", "cloud")
+        return value[:32]
+
     payload = {
         "location": str(data.get("location") or "").strip()[:120],
         "today": {
             "temp": str(data.get("today_temp") or data.get("today", {}).get("temp") or "")[:16],
             "desc": _pick("today", "desc"),
-            "icon": _pick("today", "icon", "cloud")[:32],
+            "state": _state("today"),
         },
         "tomorrow": {
             "temp": str(data.get("tomorrow_temp") or data.get("tomorrow", {}).get("temp") or "")[:16],
             "desc": _pick("tomorrow", "desc"),
-            "icon": _pick("tomorrow", "icon", "cloud")[:32],
+            "state": _state("tomorrow"),
         },
     }
     return _store(payload).to_dict()

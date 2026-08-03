@@ -73,6 +73,7 @@
   <div class="card">
     <h2>Letzte Uploads</h2>
     {% if stats.last_uploads %}
+    <div class="table-wrap">
     <table class="table">
       <thead>
         <tr><th>Name</th><th>Typ</th><th>Größe</th><th>Datum</th></tr>
@@ -88,6 +89,7 @@
         {% endfor %}
       </tbody>
     </table>
+    </div>
     {% else %}
       <p class="empty">Noch keine Medien hochgeladen.</p>
     {% endif %}

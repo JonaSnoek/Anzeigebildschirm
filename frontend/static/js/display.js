@@ -23,8 +23,46 @@
   const CLOCK_WIDGET = document.getElementById("clock-widget");
   const WEATHER = document.getElementById("weather-widget");
   const AUDIO = document.getElementById("bg-audio");
+  const LANG_BTN = document.getElementById("lang-toggle");
 
-  const WEEKDAYS = ["Sonntag", "Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag"];
+  const LANGS = ["de", "en"];
+
+  const I18N = {
+    de: {
+      today: "Heute",
+      tomorrow: "Morgen",
+      "no-data": "Keine Daten",
+      sun: "Sonnig",
+      "cloud-sun": "Leicht bewölkt",
+      cloud: "Bewölkt",
+      fog: "Nebel",
+      rain: "Regen",
+      showers: "Regenschauer",
+      storm: "Gewitter",
+      snow: "Schnee",
+    },
+    en: {
+      today: "Today",
+      tomorrow: "Tomorrow",
+      "no-data": "No data",
+      sun: "Sunny",
+      "cloud-sun": "Partly Cloudy",
+      cloud: "Cloudy",
+      fog: "Fog",
+      rain: "Rain",
+      showers: "Showers",
+      storm: "Thunderstorm",
+      snow: "Snow",
+    },
+  };
+
+  let lang = localStorage.getItem("display_lang");
+  if (!LANGS.includes(lang)) lang = "de";
+  const t = (key) => (I18N[lang] && I18N[lang][key]) || key;
+  const tWeather = (stateKey, fallback) => {
+    if (fallback && fallback.trim() === "Keine Daten") return t("no-data");
+    return (I18N[lang] && I18N[lang][stateKey]) || fallback || stateKey || t("no-data");
+  };
 
   const WEATHER_ICONS = {
     sun: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>',
@@ -34,6 +72,7 @@
     rain: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M18 10a4 4 0 011 7H7.5a3.5 3.5 0 01-.5-6.97 4 4 0 016-4.03h1a3.98 3.98 0 014 4zM8 15l-1 2M13 15l-1 2M18 15l-1 2"/></svg>',
     snow: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M18 10a4 4 0 011 7H7.5a3.5 3.5 0 01-.5-6.97 4 4 0 016-4.03h1a3.98 3.98 0 014 4zM9 15l-1 1M13 15l-1 1M17 15l-1 1M9 18l-1 1M13 18l-1 1"/></svg>',
     storm: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M18 10a4 4 0 011 7H7.5a3.5 3.5 0 01-.5-6.97 4 4 0 016-4.03h1a3.98 3.98 0 014 4zM11 17l-1.5 3H13l-2 4"/></svg>',
+    showers: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M18 10a4 4 0 011 7H7.5a3.5 3.5 0 01-.5-6.97 4 4 0 016-4.03h1a3.98 3.98 0 014 4zM8 14l-1 1M13 14l-1 1M17 14l-1 1M8 18l-1 1M13 18l-1 1"/></svg>',
   };
 
   const state = {
@@ -61,7 +100,12 @@
   function updateClock() {
     const now = new Date();
     const time = `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
-    const date = `${WEEKDAYS[now.getDay()]}, ${pad(now.getDate())}.${pad(now.getMonth() + 1)}.${now.getFullYear()}`;
+    const date = now.toLocaleDateString(lang, {
+      weekday: "long",
+      day: "numeric",
+      month: "numeric",
+      year: "numeric",
+    });
     CLOCK_BIG.textContent = time;
     DATE_BIG.textContent = date;
     CLOCK_WIDGET.innerHTML = `<span class="clock-time">${time}</span><span class="clock-date">${date}</span>`;
@@ -163,16 +207,19 @@
 
     const block = (label, day) => {
       const d = day || { temp: "", desc: "", icon: "cloud" };
+      const stateKey = d.state || d.icon || "cloud";
+      const head = label === "today" ? t("today") : t("tomorrow");
+      const desc = tWeather(stateKey, d.desc);
       return `
       <div class="weather-block weather-${label}">
-        ${display === "large" ? `<div class="weather-head">${label === "today" ? "Heute" : "Morgen"}</div>` : ""}
+        ${display === "large" ? `<div class="weather-head">${head}</div>` : ""}
         <div class="weather-body">
-          <span class="weather-icon">${icon(d.icon)}</span>
+          <span class="weather-icon">${icon(stateKey)}</span>
           <div class="weather-info">
             <span class="weather-temp">${esc(d.temp)}°</span>
-            ${display === "large" ? `<span class="weather-desc">${esc(d.desc)}</span>` : ""}
+            ${display === "large" ? `<span class="weather-desc">${esc(desc)}</span>` : ""}
           </div>
-          ${display === "small" ? `<span class="weather-day">${label === "today" ? "Heute" : "Morgen"}</span>` : ""}
+          ${display === "small" ? `<span class="weather-day">${head}</span>` : ""}
         </div>
       </div>`;
     };
@@ -362,8 +409,23 @@
     }
   }
 
+  /* ---------- Sprache ---------- */
+  function setLang(next) {
+    if (!LANGS.includes(next)) next = "de";
+    lang = next;
+    localStorage.setItem("display_lang", lang);
+    document.documentElement.lang = lang;
+    if (LANG_BTN) LANG_BTN.textContent = lang.toUpperCase();
+    updateClock();
+    renderWeather();
+  }
+
   /* ---------- Start ---------- */
   function start() {
+    if (LANG_BTN) {
+      LANG_BTN.textContent = lang.toUpperCase();
+      LANG_BTN.addEventListener("click", () => setLang(lang === "de" ? "en" : "de"));
+    }
     updateClock();
     setInterval(updateClock, 1000);
     refresh();
