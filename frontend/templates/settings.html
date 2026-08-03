@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% set active = "settings" %}
+{% block title %}Wiedergabe · {{ site_name }}{% endblock %}
+
+{% block content %}
+  <h1>Wiedergabe-Einstellungen</h1>
+
+  <div class="card">
+    <form id="settings-form">
+      <div class="field">
+        <label for="slide_duration">Anzeigedauer pro Bild (Sekunden)</label>
+        <input type="number" id="slide_duration" name="slide_duration" min="3" max="300" value="{{ settings.slide_duration }}">
+        <div class="hint">3–300 Sekunden.</div>
+      </div>
+
+      <div class="field">
+        <label for="transition">Übergangseffekt</label>
+        <select id="transition" name="transition">
+          <option value="fade" {{ 'selected' if settings.transition == 'fade' }}>Fade (weich)</option>
+          <option value="none" {{ 'selected' if settings.transition == 'none' }}>Keiner</option>
+        </select>
+      </div>
+
+      <div class="checkbox-line">
+        <input type="checkbox" id="autoplay" name="autoplay" {{ 'checked' if settings.autoplay == 'true' }}>
+        <label for="autoplay">Automatische Wiedergabe</label>
+      </div>
+
+      <div class="checkbox-line">
+        <input type="checkbox" id="loop" name="loop" {{ 'checked' if settings.loop == 'true' }}>
+        <label for="loop">Wiederholen (Loop)</label>
+      </div>
+
+      <div class="field">
+        <label for="volume">Lautstärke: <span id="volume-value"></span></label>
+        <input type="range" id="volume" name="volume" min="0" max="100" value="{{ settings.volume }}">
+      </div>
+
+      <div class="checkbox-line">
+        <input type="checkbox" id="music_enabled" name="music_enabled" {{ 'checked' if settings.music_enabled == 'true' }}>
+        <label for="music_enabled">Hintergrundmusik abspielen</label>
+      </div>
+
+      <button type="submit" class="btn btn-primary">Speichern</button>
+      <span id="settings-status" class="status"></span>
+    </form>
+  </div>
+{% endblock %}

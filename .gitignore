@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+
+# Umgebung & Secrets
+.env
+
+# Datenbank
+database/*.db
+database/*.db-*
+
+# Hochgeladene Medien (nur .gitkeep behalten)
+uploads/images/*
+uploads/videos/*
+uploads/audio/*
+!uploads/images/.gitkeep
+!uploads/videos/.gitkeep
+!uploads/audio/.gitkeep
+
+# Logs & Betriebssystem
+*.log
+.DS_Store
+Thumbs.db

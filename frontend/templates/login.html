@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>Anmelden · {{ site_name }}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <link rel="icon" href="data:,">
+</head>
+<body class="login-body">
+  <div class="login-wrap">
+    <div class="login-card">
+      <div class="brand login-brand"><span class="dot"></span>{{ site_name }}</div>
+
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% for category, message in messages %}
+          <div class="flash flash-{{ category }}">{{ message }}</div>
+        {% endfor %}
+      {% endwith %}
+
+      <form method="post" action="{{ url_for('auth.login') }}">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+
+        <div class="field">
+          <label for="username">Benutzername</label>
+          <input type="text" id="username" name="username" autocomplete="username" required autofocus>
+        </div>
+
+        <div class="field">
+          <label for="password">Passwort</label>
+          <input type="password" id="password" name="password" autocomplete="current-password" required>
+        </div>
+
+        <button type="submit" class="btn btn-primary login-submit">Anmelden</button>
+      </form>
+    </div>
+  </div>
+</body>
+</html>

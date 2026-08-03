@@ -1,0 +1,6 @@
+# Einheitliche Zeilenenden: Linux-Skripte mit LF (verhindert CRLF-Fehler)
+* text=auto
+*.sh text eol=lf
+*.py text eol=lf
+Dockerfile text eol=lf
+*.md text eol=lf

@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>{{ site_name }}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/display.css') }}">
+  <link rel="icon" href="data:,">
+</head>
+<body>
+  <!-- Medien-Ebene (Bilder / Videos) -->
+  <div id="player" class="hidden">
+    <div id="layer-a" class="layer"></div>
+    <div id="layer-b" class="layer"></div>
+  </div>
+
+  <!-- Leerzustand: große Uhr mittig über den gesamten Bildschirm -->
+  <div id="empty-state">
+    <div id="clock-big" class="clock-big">--:--:--</div>
+    <div id="date-big" class="date-big"></div>
+    <div class="app-name">{{ site_name }}</div>
+  </div>
+
+  <!-- Kleine Uhr unten rechts (bei laufenden Medien) -->
+  <div id="clock-small" class="clock-small"></div>
+
+  <!-- Hintergrundmusik -->
+  <audio id="bg-audio" loop></audio>
+
+  <script src="{{ url_for('static', filename='js/display.js') }}"></script>
+</body>
+</html>

@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% set active = "media" %}
+{% block title %}Medien · {{ site_name }}{% endblock %}
+
+{% block content %}
+<div id="media-page">
+  <h1>Medienverwaltung</h1>
+
+  <div class="card">
+    <h2>Datei hochladen</h2>
+    <p class="hint">
+      Bilder: {{ allowed.image | join(", ") }} (max. {{ max_sizes.image }}&nbsp;MB) ·
+      Videos: {{ allowed.video | join(", ") }} (max. {{ max_sizes.video }}&nbsp;MB) ·
+      Audio: {{ allowed.audio | join(", ") }} (max. {{ max_sizes.audio }}&nbsp;MB)
+    </p>
+    <form id="upload-form">
+      <div class="field">
+        <input type="file" id="upload-input" multiple
+               accept="{{ allowed.image | join(',') }},{{ allowed.video | join(',') }},{{ allowed.audio | join(',') }}">
+      </div>
+      <button type="submit" class="btn btn-primary">Hochladen</button>
+      <span id="upload-status" class="status"></span>
+    </form>
+  </div>
+
+  <div class="tabs">
+    <button class="tab active" data-type="image">Bilder (<span data-count="image">0</span>)</button>
+    <button class="tab" data-type="video">Videos (<span data-count="video">0</span>)</button>
+    <button class="tab" data-type="audio">Audio (<span data-count="audio">0</span>)</button>
+  </div>
+
+  <div id="media-grid" class="media-grid"></div>
+</div>
+{% endblock %}
