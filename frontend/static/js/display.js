@@ -5,8 +5,8 @@
  * - Bilder: Diashow mit konfigurierbarer Dauer und Fade-Übergang
  * - Videos: automatischer Start, danach weiter zur nächsten Datei
  * - Audio: Hintergrundmusik in Endlosschleife (falls aktiviert)
- * - Uhr: konfigurierbar (Größe, Position, Interstitial-Ansicht)
- * - Wetter: Widget mit heutigen und morgigen Werten (falls aktiviert)
+ * - Uhr + Wetter: frei konfigurierbar (Größe per Schieberegler,
+ *   Position automatisch oder frei per X/Y)
  * - Aktualisiert die Daten alle 30 Sekunden (Live-Vorschau/Änderungen)
  */
 
@@ -17,6 +17,7 @@
   const LAYER_B = document.getElementById("layer-b");
   const PLAYER = document.getElementById("player");
   const CLOCK_SCREEN = document.getElementById("clock-screen");
+  const CLOCK_BLOCK = document.getElementById("clock-screen-block");
   const CLOCK_BIG = document.getElementById("clock-big");
   const DATE_BIG = document.getElementById("date-big");
   const CLOCK_WIDGET = document.getElementById("clock-widget");
@@ -34,9 +35,6 @@
     snow: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M18 10a4 4 0 011 7H7.5a3.5 3.5 0 01-.5-6.97 4 4 0 016-4.03h1a3.98 3.98 0 014 4zM9 15l-1 1M13 15l-1 1M17 15l-1 1M9 18l-1 1M13 18l-1 1"/></svg>',
     storm: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M18 10a4 4 0 011 7H7.5a3.5 3.5 0 01-.5-6.97 4 4 0 016-4.03h1a3.98 3.98 0 014 4zM11 17l-1.5 3H13l-2 4"/></svg>',
   };
-
-  const POSITIONS = ["bottom-left", "bottom-right", "top-left", "top-right"];
-  const WEATHER_SIZES = ["small", "medium", "large"];
 
   const state = {
     settings: {},
@@ -85,51 +83,104 @@
       loop: s.loop !== "false",
       volume: toInt(s.volume, 70, 0, 100) / 100,
       music: s.music_enabled !== "false",
+
+      // Uhr
       clockEnabled: s.clock_enabled !== "false",
-      clockSize: s.clock_size === "big" ? "big" : "small",
-      clockPosition: POSITIONS.includes(s.clock_position) ? s.clock_position : "bottom-right",
+      clockMode: s.clock_mode === "custom" ? "custom" : "auto",
+      clockX: toInt(s.clock_x, 50, 0, 100),
+      clockY: toInt(s.clock_y, 50, 0, 100),
+      clockSizePct: toInt(s.clock_size_pct, 100, 30, 300) / 100,
       interstitial: s.clock_interstitial === "true",
+
+      // Wetter
       weatherEnabled: s.weather_enabled !== "false",
-      weatherPosition: POSITIONS.includes(s.weather_position) ? s.weather_position : "top-right",
-      weatherSize: WEATHER_SIZES.includes(s.weather_size) ? s.weather_size : "medium",
+      weatherDisplay: s.weather_display === "small" ? "small" : "large",
+      weatherMode: s.weather_mode === "custom" ? "custom" : "auto",
+      weatherX: toInt(s.weather_x, 50, 0, 100),
+      weatherY: toInt(s.weather_y, 50, 0, 100),
+      weatherSizePct: toInt(s.weather_size_pct, 100, 30, 300) / 100,
     };
   }
 
   const fadeMs = () => (cfg().transition === "none" ? 0 : 800);
 
-  /* ---------- Anzeige der Uhr-Ansicht / Overlays ---------- */
+  /* ---------- Uhr anwenden (Größe + Position) ---------- */
   function applyClock() {
     const c = cfg();
-    // Im Leerzustand/Interstitial ohne aktivierter Uhr nur den Namen zeigen
+
+    // Uhr-Ansicht (Leerzustand / Interstitial)
     CLOCK_SCREEN.classList.toggle("no-clock", !c.clockEnabled);
+    CLOCK_BLOCK.style.setProperty("--widget-scale", c.clockSizePct);
+    if (c.clockMode === "custom") {
+      CLOCK_BLOCK.classList.add("clock-custom");
+      CLOCK_BLOCK.style.left = c.clockX + "%";
+      CLOCK_BLOCK.style.top = c.clockY + "%";
+    } else {
+      CLOCK_BLOCK.classList.remove("clock-custom");
+      CLOCK_BLOCK.style.left = "";
+      CLOCK_BLOCK.style.top = "";
+    }
+
+    // Uhr-Overlay während der Medienwiedergabe
     CLOCK_WIDGET.classList.remove("hidden");
-    CLOCK_WIDGET.className = `clock-pos-${c.clockPosition} clock-size-${c.clockSize}`;
+    CLOCK_WIDGET.style.setProperty("--widget-scale", c.clockSizePct);
+    if (c.clockMode === "custom") {
+      CLOCK_WIDGET.className = "clock-custom";
+      CLOCK_WIDGET.style.left = c.clockX + "%";
+      CLOCK_WIDGET.style.top = c.clockY + "%";
+    } else {
+      CLOCK_WIDGET.className = "clock-auto";
+      CLOCK_WIDGET.style.left = "";
+      CLOCK_WIDGET.style.top = "";
+    }
     if (!c.clockEnabled || state.clockScreenShown) CLOCK_WIDGET.classList.add("hidden");
   }
 
-  /* ---------- Wetter-Widget ---------- */
+  /* ---------- Wetter-Widget anwenden (Größe + Position + Inhalt) ---------- */
   function renderWeather() {
     const c = cfg();
-    WEATHER.className =
-      `weather-widget weather-pos-${c.weatherPosition} weather-size-${c.weatherSize}`;
+    const display = c.weatherDisplay === "small" ? "small" : "large";
+    WEATHER.className = "weather-widget weather-" + display;
+    WEATHER.classList.remove("hidden");
+    WEATHER.style.setProperty("--widget-scale", c.weatherSizePct);
+    if (c.weatherMode === "custom") {
+      WEATHER.classList.add("weather-custom");
+      WEATHER.style.left = c.weatherX + "%";
+      WEATHER.style.top = c.weatherY + "%";
+    } else {
+      WEATHER.classList.add("weather-auto");
+      WEATHER.style.left = "";
+      WEATHER.style.top = "";
+    }
+
     if (!c.weatherEnabled || !state.weather || !state.weather.location) {
       WEATHER.classList.add("hidden");
       return;
     }
+
     const w = state.weather;
     const icon = (key) => WEATHER_ICONS[key] || WEATHER_ICONS.cloud;
+
+    const block = (label, day) => {
+      const d = day || { temp: "", desc: "", icon: "cloud" };
+      return `
+      <div class="weather-block weather-${label}">
+        ${display === "large" ? `<div class="weather-head">${label === "today" ? "Heute" : "Morgen"}</div>` : ""}
+        <div class="weather-body">
+          <span class="weather-icon">${icon(d.icon)}</span>
+          <div class="weather-info">
+            <span class="weather-temp">${esc(d.temp)}°</span>
+            ${display === "large" ? `<span class="weather-desc">${esc(d.desc)}</span>` : ""}
+          </div>
+          ${display === "small" ? `<span class="weather-day">${label === "today" ? "Heute" : "Morgen"}</span>` : ""}
+        </div>
+      </div>`;
+    };
+
     WEATHER.innerHTML =
       `<div class="weather-location">${esc(w.location)}</div>` +
-      `<div class="weather-row weather-today">` +
-        `<span class="weather-main">${icon(w.today.icon)}<span class="weather-desc">${esc(w.today.desc)}</span></span>` +
-        `<span class="weather-temp">${esc(w.today.temp)}°</span>` +
-      `</div>` +
-      `<div class="weather-row weather-tomorrow">` +
-        `<span class="weather-day">Morgen</span>` +
-        `<span class="weather-main">${icon(w.tomorrow.icon)}<span class="weather-desc">${esc(w.tomorrow.desc)}</span></span>` +
-        `<span class="weather-temp">${esc(w.tomorrow.temp)}°</span>` +
-      `</div>`;
-    WEATHER.classList.remove("hidden");
+      block("today", w.today) +
+      block("tomorrow", w.tomorrow);
   }
 
   /* ---------- Hilfsfunktionen ---------- */

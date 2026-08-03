@@ -43,15 +43,17 @@
     <div class="display-summary">
       <div class="chip"><span class="dot"></span>Uhr:
         {% if stats.settings.clock_enabled == 'true' %}
-          {{ 'Groß' if stats.settings.clock_size == 'big' else 'Klein' }}
-          ({{ stats.settings.clock_position | replace('-', ' ') }})
+          {{ stats.settings.clock_size_pct }} %
+          ({{ 'manuell' if stats.settings.clock_mode == 'custom' else 'automatisch' }})
           {% if stats.settings.clock_interstitial == 'true' %} · Zwischenansicht{% endif %}
         {% else %}aus{% endif %}
       </div>
       <div class="chip"><span class="dot"></span>Wetter:
         {% if stats.settings.weather_enabled == 'true' %}
           {{ stats.settings.weather_city or '–' }}
-          ({{ stats.settings.weather_position | replace('-', ' ') }}, {{ stats.settings.weather_size }})
+          ({{ 'groß' if stats.settings.weather_display == 'large' else 'klein' }},
+          {{ stats.settings.weather_size_pct }} %,
+          {{ 'manuell' if stats.settings.weather_mode == 'custom' else 'automatisch' }})
         {% else %}aus{% endif %}
       </div>
       <div class="chip"><span class="dot"></span>Medien:

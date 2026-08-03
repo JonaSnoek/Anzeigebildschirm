@@ -1,7 +1,11 @@
 /*
  * Digital Signage – Anzeigebildschirm
- * Vollbild, schwarz, große Uhr im Leerzustand/Interstitial, konfigurierbares
- * Uhr-Overlay und Wetter-Widget bei laufenden Medien.
+ *
+ * Alle Widgets (Uhr, Wetter) sind frei konfigurierbar:
+ * - Größe über Schieberegler (CSS-Variable --widget-scale, z. B. 1.0 = 100 %)
+ * - Position automatisch (Standard) oder frei über X/Y in Prozent
+ * - Einheitliches Design: abgerundete Ecken, leichte Transparenz, weiche
+ *   Schatten (Glassmorphism)
  */
 
 * { box-sizing: border-box; }
@@ -38,35 +42,40 @@ body {
 }
 
 /* ---------- Uhr-Ansicht (Leerzustand / Interstitial) ---------- */
-#clock-screen {
-  position: fixed;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 1.5vh;
+#clock-screen { position: fixed; inset: 0; }
+
+/* Der Uhr-Block wird entweder mittig (auto) oder per X/Y positioniert. */
+#clock-screen-block {
+  --widget-scale: 1;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
   text-align: center;
   padding: 2rem;
 }
 
+#clock-screen-block.clock-custom {
+  transform: translate(-50%, -50%);
+}
+
 #clock-big {
-  font-size: clamp(4rem, 16vh, 20vh);
+  font-size: calc(clamp(4rem, 16vh, 20vh) * var(--widget-scale));
   font-weight: 200;
   letter-spacing: .03em;
   font-variant-numeric: tabular-nums;
   line-height: 1;
 }
 
-/* Ist die Uhr deaktiviert, wird in der Uhr-Ansicht nur der Name gezeigt. */
-#clock-screen.no-clock #clock-big,
-#clock-screen.no-clock #date-big { visibility: hidden; }
-
 #date-big {
-  font-size: clamp(1.4rem, 4.5vh, 3.5rem);
+  font-size: calc(clamp(1.4rem, 4.5vh, 3.5rem) * var(--widget-scale));
   font-weight: 300;
   opacity: .85;
+  margin-top: .4em;
 }
+
+/* Ist die Uhr deaktiviert, wird in der Uhr-Ansicht nur der Name gezeigt. */
+#clock-screen.no-clock #clock-screen-block { visibility: hidden; }
 
 .app-name {
   position: fixed;
@@ -80,16 +89,18 @@ body {
   z-index: 5;
 }
 
-/* ---------- Uhr-Overlay während der Medienwiedergabe ---------- */
+/* ---------- Uhr-Widget während der Medienwiedergabe ---------- */
 #clock-widget {
+  --widget-scale: 1;
   position: fixed;
   z-index: 10;
   font-weight: 500;
   line-height: 1.3;
-  color: rgba(255, 255, 255, .92);
-  text-shadow: 0 1px 6px rgba(0, 0, 0, .8);
+  color: rgba(255, 255, 255, .95);
+  text-shadow: 0 2px 10px rgba(0, 0, 0, .9);
   font-variant-numeric: tabular-nums;
   pointer-events: none;
+  text-align: center;
 }
 
 #clock-widget .clock-time { display: block; }
@@ -97,81 +108,40 @@ body {
 #clock-widget .clock-date {
   display: block;
   font-size: .7em;
-  opacity: .8;
+  opacity: .82;
   font-weight: 400;
+  margin-top: .15em;
 }
 
-/* Positionen */
-.clock-pos-top-left      { top: 24px; left: 28px; text-align: left; }
-.clock-pos-top-right     { top: 24px; right: 28px; text-align: right; }
-.clock-pos-bottom-left   { bottom: 24px; left: 28px; text-align: left; }
-.clock-pos-bottom-right  { bottom: 24px; right: 28px; text-align: right; }
-
-/* Größen */
-#clock-widget.clock-size-small {
-  font-size: clamp(1rem, 2.4vh, 1.7rem);
+/* Automatische Position: unten rechts (Standard bei Medien) */
+#clock-widget.clock-auto {
+  right: 32px;
+  bottom: 26px;
+  text-align: right;
+  font-size: calc(clamp(1rem, 2.4vh, 1.7rem) * var(--widget-scale));
 }
 
-#clock-widget.clock-size-big {
-  top: 50%;
-  left: 50%;
+/* Freie Position: X/Y in Prozent, Widget-Mitte liegt auf dem Punkt */
+#clock-widget.clock-custom {
   transform: translate(-50%, -50%);
-  text-align: center;
-  font-size: clamp(3.4rem, 13vh, 15vh);
-  font-weight: 200;
-  letter-spacing: .03em;
-  line-height: 1.1;
-  text-shadow: 0 2px 14px rgba(0, 0, 0, .9);
+  font-size: calc(clamp(1.1rem, 2.6vh, 1.9rem) * var(--widget-scale));
 }
 
 /* ---------- Wetter-Widget ---------- */
 .weather-widget {
+  --widget-scale: 1;
   position: fixed;
   z-index: 11;
-  background: rgba(0, 0, 0, .45);
-  border: 1px solid rgba(255, 255, 255, .14);
-  border-radius: 14px;
-  backdrop-filter: blur(4px);
+  background: rgba(10, 14, 22, .5);
+  border: 1px solid rgba(255, 255, 255, .16);
+  border-radius: 1em;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, .35);
   color: #fff;
   pointer-events: none;
   font-variant-numeric: tabular-nums;
 }
-
-.weather-pos-top-left     { top: 20px; left: 20px; }
-.weather-pos-top-right    { top: 20px; right: 20px; }
-.weather-pos-bottom-left  { bottom: 20px; left: 20px; }
-.weather-pos-bottom-right { bottom: 20px; right: 20px; }
-
-.weather-location {
-  font-weight: 600;
-  letter-spacing: .04em;
-  opacity: .9;
-  display: flex;
-  align-items: center;
-  gap: .4rem;
-}
-
-.weather-location::before {
-  content: "";
-  width: .5em;
-  height: .5em;
-  border-radius: 50%;
-  background: #38bdf8;
-  box-shadow: 0 0 8px #38bdf8;
-}
-
-.weather-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: .9rem;
-}
-
-.weather-day { opacity: .85; }
-
-.weather-main { display: flex; align-items: center; gap: .55rem; }
-.weather-desc { opacity: .85; }
-.weather-temp { font-weight: 700; }
 
 .weather-widget svg {
   width: 1.5em;
@@ -180,26 +150,104 @@ body {
   opacity: .95;
 }
 
-/* Größen */
-.weather-size-small {
-  padding: .45rem .7rem;
-  font-size: .8rem;
-  border-radius: 10px;
-  max-width: 210px;
-}
-.weather-size-small .weather-tomorrow { display: none; }
-.weather-size-small .weather-desc { display: none; }
-
-.weather-size-medium {
-  padding: .6rem .9rem;
-  font-size: .95rem;
-  max-width: 250px;
+.weather-widget .weather-location {
+  font-size: .8em;
+  font-weight: 600;
+  letter-spacing: .05em;
+  opacity: .75;
+  border-bottom: 1px solid rgba(255, 255, 255, .12);
+  padding-bottom: .3em;
+  margin-bottom: .2em;
 }
 
-.weather-size-large {
-  padding: .85rem 1.1rem;
-  font-size: 1.15rem;
-  max-width: 300px;
+/* Automatische Position: oben rechts (Standard) */
+.weather-widget.weather-auto {
+  top: 24px;
+  right: 24px;
+  text-align: right;
 }
-.weather-size-large svg { width: 2em; height: 2em; }
-.weather-size-large .weather-temp { font-size: 1.35em; }
+
+/* Freie Position: X/Y in Prozent, Widget-Mitte liegt auf dem Punkt */
+.weather-widget.weather-custom {
+  transform: translate(-50%, -50%);
+  text-align: center;
+}
+
+/* --- Kleine Ansicht: Symbol + Temperatur + Tag je Zeile --- */
+.weather-widget.weather-small {
+  font-size: calc(.95rem * var(--widget-scale));
+  padding: .6em .8em;
+  display: flex;
+  flex-direction: column;
+  gap: .45em;
+}
+
+.weather-small .weather-block {
+  display: flex;
+  align-items: center;
+  gap: .7em;
+}
+
+.weather-small .weather-icon { display: inline-flex; }
+
+.weather-small .weather-temp {
+  font-size: 1.15em;
+  font-weight: 700;
+}
+
+.weather-small .weather-day {
+  margin-left: auto;
+  opacity: .85;
+  font-size: .85em;
+}
+
+.weather-small .weather-desc,
+.weather-small .weather-head { display: none; }
+
+/* --- Große Ansicht: Überschrift, großes Symbol, große Temperatur, Beschreibung --- */
+.weather-widget.weather-large {
+  font-size: calc(1.15rem * var(--widget-scale));
+  padding: .9em 1.1em;
+  min-width: 12em;
+  display: flex;
+  flex-direction: column;
+  gap: .6em;
+}
+
+.weather-large .weather-head {
+  font-size: .8em;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  opacity: .8;
+  border-bottom: 1px solid rgba(255, 255, 255, .15);
+  padding-bottom: .25em;
+}
+
+.weather-large .weather-block { display: flex; flex-direction: column; gap: .15em; }
+
+.weather-large .weather-body {
+  display: flex;
+  align-items: center;
+  gap: .7em;
+}
+
+.weather-large .weather-icon svg {
+  width: 2.6em;
+  height: 2.6em;
+}
+
+.weather-large .weather-info {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.weather-large .weather-temp {
+  font-size: 2em;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.weather-large .weather-desc { opacity: .85; font-size: .95em; }
+.weather-large .weather-day { display: none; }
+

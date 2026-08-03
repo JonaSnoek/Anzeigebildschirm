@@ -80,17 +80,22 @@ class Config:
         "volume": "70",                 # Lautstärke 0–100
         "music_enabled": "true",        # Hintergrundmusik
 
-        # Uhr auf dem Anzeigebildschirm
+        # Uhr-Widget
         "clock_enabled": "true",        # Uhr grundsätzlich anzeigen
-        "clock_size": "small",          # small | big
-        "clock_position": "bottom-right",  # bottom-left | bottom-right | top-left | top-right
+        "clock_mode": "auto",           # auto | custom (X/Y-Position)
+        "clock_x": "50",                # 0–100 (% horizontale Position, nur custom)
+        "clock_y": "50",                # 0–100 (% vertikale Position, nur custom)
+        "clock_size_pct": "100",        # 30–300 (% Skalierung über Schieberegler)
         "clock_interstitial": "false",  # Uhr-Ansicht zwischen den Medien einblenden
 
         # Wetter-Widget
         "weather_enabled": "false",     # Wetter-Widget anzeigen
-        "weather_position": "top-right",  # bottom-left | bottom-right | top-left | top-right
-        "weather_size": "medium",       # small | medium | large
+        "weather_display": "large",     # small | large (Darstellung)
         "weather_city": "",             # Ortsname für das Wetter (z. B. "Berlin")
+        "weather_mode": "auto",         # auto | custom (X/Y-Position)
+        "weather_x": "50",              # 0–100 (% horizontale Position, nur custom)
+        "weather_y": "50",              # 0–100 (% vertikale Position, nur custom)
+        "weather_size_pct": "100",      # 30–300 (% Skalierung über Schieberegler)
     }
 
     # ---- Wetter -------------------------------------------------------------

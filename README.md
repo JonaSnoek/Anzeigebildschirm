@@ -39,13 +39,17 @@ Wiedergabe und Benutzer über ein dunkles, modernes Dashboard.
 - Videos (MP4, WebM) starten **automatisch** und spielen nacheinander
 - Hintergrundmusik (MP3, WAV, OGG) dauerhaft im Hintergrund
 - **Uhr + Datum**, die sich jede Sekunde aktualisiert:
-  - **Größe** konfigurierbar: klein (Ecke) oder groß (mittig)
-  - **Position** wählbar: oben/unten links/rechts (für die kleine Uhr)
+  - **Größe** frei skalierbar über Schieberegler (30–300 %)
+  - **Position** automatisch (ohne Medien mittig, mit Medien unten rechts)
+    oder **frei wählbar** über X/Y-Schieberegler bzw. **Drag & Drop** in der
+    Live-Vorschau
   - **Zwischenansicht** (Interstitial): Uhr-Ansicht zwischen den Medien
   - ohne Medien: große Uhr mittig über den gesamten Bildschirm
 - **Wetter-Widget** (optional): Ort, Temperatur und Zustand für heute und
   morgen – automatisch über Open-Meteo (kostenlos, ohne API-Schlüssel)
-  oder manuell gepflegt; Größe und Position einstellbar
+  oder manuell gepflegt; **zwei Darstellungen** (klein: Symbol + Temperatur,
+  groß: Überschrift, großes Symbol, Beschreibung), Größe und Position wie
+  bei der Uhr frei einstellbar
 - **Medien einzeln ein-/ausblenden** (pro Datei, ohne Löschen)
 - Erkennt automatisch neue/geänderte Medien (aktualisiert sich alle 30 s)
 
@@ -60,11 +64,12 @@ Wiedergabe und Benutzer über ein dunkles, modernes Dashboard.
 - **Medienverwaltung:** Hochladen, Löschen, Ersetzen, Umbenennen, Sortieren
   (Drag & Drop + Pfeiltasten), Vorschau, **Ein/Aus-Schalter pro Datei**
 - **Wiedergabe-Einstellungen:** Anzeigedauer, Übergang, Autoplay, Loop,
-  Lautstärke, Hintergrundmusik, **Uhr** (Größe/Position/Zwischenansicht),
-  **Wetter-Widget** (aktiv, Ort, Position, Größe) – mit **Live-Vorschau**,
-  die die Änderungen vor dem Speichern in Echtzeit zeigt
-- **Wetterdaten:** automatisch abrufen (Open-Meteo) oder manuell pflegen
-  (falls kein Internet vorhanden ist)
+  Lautstärke, Hintergrundmusik, **Widgets** (Uhr und Wetter: aktiv,
+  Größe per Schieberegler, Position automatisch oder frei per X/Y,
+  **Drag & Drop** in der Vorschau) – mit **Live-Vorschau**, die jede
+  Änderung vor dem Speichern in Echtzeit zeigt
+- **Wetterdaten:** automatisch abrufen (Open-Meteo) oder **manuell pflegen**
+  (Wetterzustand + Temperatur pro Tag, Symbol wird automatisch angezeigt)
 - **Benutzerverwaltung:** Benutzer anlegen/löschen, Passwort ändern,
   Rollen vergeben, Benutzer deaktivieren
 

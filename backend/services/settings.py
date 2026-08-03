@@ -24,17 +24,22 @@ ALLOWED = {
     "volume": ("int", 0, 100),
     "music_enabled": ("bool",),
 
-    # Uhr
+    # Uhr-Widget
     "clock_enabled": ("bool",),
-    "clock_size": ("choice", ["small", "big"]),
-    "clock_position": ("choice", ["bottom-left", "bottom-right", "top-left", "top-right"]),
+    "clock_mode": ("choice", ["auto", "custom"]),
+    "clock_x": ("int", 0, 100),
+    "clock_y": ("int", 0, 100),
+    "clock_size_pct": ("int", 30, 300),
     "clock_interstitial": ("bool",),
 
-    # Wetter
+    # Wetter-Widget
     "weather_enabled": ("bool",),
-    "weather_position": ("choice", ["bottom-left", "bottom-right", "top-left", "top-right"]),
-    "weather_size": ("choice", ["small", "medium", "large"]),
+    "weather_display": ("choice", ["small", "large"]),
     "weather_city": ("str", 120),
+    "weather_mode": ("choice", ["auto", "custom"]),
+    "weather_x": ("int", 0, 100),
+    "weather_y": ("int", 0, 100),
+    "weather_size_pct": ("int", 30, 300),
 }
 
 

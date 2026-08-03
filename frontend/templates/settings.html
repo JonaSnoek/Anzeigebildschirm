@@ -43,144 +43,202 @@
             <input type="checkbox" id="music_enabled" name="music_enabled" {{ 'checked' if settings.music_enabled == 'true' }}>
             <label for="music_enabled">Hintergrundmusik abspielen</label>
           </div>
-
-          <hr class="separator">
-
-          <h2>Uhr</h2>
-          <div class="checkbox-line">
-            <input type="checkbox" id="clock_enabled" name="clock_enabled" {{ 'checked' if settings.clock_enabled == 'true' }}>
-            <label for="clock_enabled">Uhr auf dem Anzeigebildschirm zeigen</label>
-          </div>
-
-          <div class="field">
-            <label for="clock_size">Uhrgröße</label>
-            <select id="clock_size" name="clock_size">
-              <option value="small" {{ 'selected' if settings.clock_size == 'small' }}>Klein (Ecke)</option>
-              <option value="big" {{ 'selected' if settings.clock_size == 'big' }}>Groß (mittig)</option>
-            </select>
-          </div>
-
-          <div class="field">
-            <label for="clock_position">Position der Uhr</label>
-            <select id="clock_position" name="clock_position">
-              <option value="bottom-left" {{ 'selected' if settings.clock_position == 'bottom-left' }}>Unten links</option>
-              <option value="bottom-right" {{ 'selected' if settings.clock_position == 'bottom-right' }}>Unten rechts</option>
-              <option value="top-left" {{ 'selected' if settings.clock_position == 'top-left' }}>Oben links</option>
-              <option value="top-right" {{ 'selected' if settings.clock_position == 'top-right' }}>Oben rechts</option>
-            </select>
-            <div class="hint">Gilt für die kleine Uhr. Bei „Groß“ wird die Uhr mittig angezeigt.</div>
-          </div>
-
-          <div class="checkbox-line">
-            <input type="checkbox" id="clock_interstitial" name="clock_interstitial" {{ 'checked' if settings.clock_interstitial == 'true' }}>
-            <label for="clock_interstitial">Uhr zwischen den Medien zeigen (Zwischenansicht)</label>
-          </div>
-
-          <hr class="separator">
-
-          <h2>Wetter-Widget</h2>
-          <div class="checkbox-line">
-            <input type="checkbox" id="weather_enabled" name="weather_enabled" {{ 'checked' if settings.weather_enabled == 'true' }}>
-            <label for="weather_enabled">Wetter-Widget anzeigen</label>
-          </div>
-
-          <div class="field">
-            <label for="weather_city">Ort</label>
-            <input type="text" id="weather_city" name="weather_city" maxlength="120" placeholder="z. B. Berlin" value="{{ settings.weather_city }}">
-            <div class="hint">Wetterdaten werden automatisch über Open-Meteo abgerufen.</div>
-          </div>
-
-          <div class="field">
-            <label for="weather_position">Position des Wetter-Widgets</label>
-            <select id="weather_position" name="weather_position">
-              <option value="top-left" {{ 'selected' if settings.weather_position == 'top-left' }}>Oben links</option>
-              <option value="top-right" {{ 'selected' if settings.weather_position == 'top-right' }}>Oben rechts</option>
-              <option value="bottom-left" {{ 'selected' if settings.weather_position == 'bottom-left' }}>Unten links</option>
-              <option value="bottom-right" {{ 'selected' if settings.weather_position == 'bottom-right' }}>Unten rechts</option>
-            </select>
-          </div>
-
-          <div class="field">
-            <label for="weather_size">Größe des Wetter-Widgets</label>
-            <select id="weather_size" name="weather_size">
-              <option value="small" {{ 'selected' if settings.weather_size == 'small' }}>Klein</option>
-              <option value="medium" {{ 'selected' if settings.weather_size == 'medium' }}>Mittel</option>
-              <option value="large" {{ 'selected' if settings.weather_size == 'large' }}>Groß</option>
-            </select>
-          </div>
-
-          <button type="submit" class="btn btn-primary">Speichern</button>
-          <span id="settings-status" class="status"></span>
         </form>
       </div>
 
+      <div class="card">
+        <h2>Widgets</h2>
+
+        <!-- ==================== UHR ==================== -->
+        <section class="widget-config" data-widget="clock">
+          <div class="widget-head">
+            <span class="widget-ico">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+            </span>
+            <h3>Uhr</h3>
+            <label class="switch" title="Uhr anzeigen">
+              <input type="checkbox" id="clock_enabled" name="clock_enabled" {{ 'checked' if settings.clock_enabled == 'true' }}>
+              <span></span>
+            </label>
+          </div>
+
+          <div class="widget-body">
+            <div class="slider-row">
+              <span class="slider-label">Größe</span>
+              <input type="range" class="slider" id="clock_size_pct" name="clock_size_pct" min="30" max="300" step="5" value="{{ settings.clock_size_pct }}">
+              <span class="slider-value" id="clock_size_pct_val">{{ settings.clock_size_pct }}%</span>
+            </div>
+            <div class="slider-row">
+              <span class="slider-label">X-Position</span>
+              <input type="range" class="slider" id="clock_x" name="clock_x" min="0" max="100" step="1" value="{{ settings.clock_x }}">
+              <span class="slider-value" id="clock_x_val">{{ settings.clock_x }}%</span>
+            </div>
+            <div class="slider-row">
+              <span class="slider-label">Y-Position</span>
+              <input type="range" class="slider" id="clock_y" name="clock_y" min="0" max="100" step="1" value="{{ settings.clock_y }}">
+              <span class="slider-value" id="clock_y_val">{{ settings.clock_y }}%</span>
+            </div>
+
+            <div class="segmented" id="clock_mode_seg">
+              <button type="button" data-value="auto">Automatisch</button>
+              <button type="button" data-value="custom">Manuell</button>
+            </div>
+            <input type="hidden" id="clock_mode" name="clock_mode" value="{{ settings.clock_mode }}">
+            <div class="hint" id="clock_mode_hint">
+              Automatisch: ohne Medien mittig, mit Medien unten rechts.
+            </div>
+
+            <div class="checkbox-line">
+              <input type="checkbox" id="clock_interstitial" name="clock_interstitial" {{ 'checked' if settings.clock_interstitial == 'true' }}>
+              <label for="clock_interstitial">Uhr-Ansicht zwischen den Medien zeigen</label>
+            </div>
+          </div>
+        </section>
+
+        <hr class="separator">
+
+        <!-- ==================== WETTER ==================== -->
+        <section class="widget-config" data-widget="weather">
+          <div class="widget-head">
+            <span class="widget-ico">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 11a4 4 0 011 7H7.5a3.5 3.5 0 01-.5-6.97 4 4 0 016-4.03h1a3.98 3.98 0 014 4z"/><circle cx="8" cy="5" r="3"/><path d="M11 4.5V3M5 5H3.5"/></svg>
+            </span>
+            <h3>Wetter</h3>
+            <label class="switch" title="Wetter-Widget anzeigen">
+              <input type="checkbox" id="weather_enabled" name="weather_enabled" {{ 'checked' if settings.weather_enabled == 'true' }}>
+              <span></span>
+            </label>
+          </div>
+
+          <div class="widget-body">
+            <div class="field">
+              <label for="weather_city">Ort</label>
+              <input type="text" id="weather_city" name="weather_city" maxlength="120" placeholder="z. B. Berlin" value="{{ settings.weather_city }}">
+              <div class="hint">Wetterdaten werden automatisch über Open-Meteo abgerufen.</div>
+            </div>
+
+            <div class="field">
+              <label>Darstellung</label>
+              <div class="segmented" id="weather_display_seg">
+                <button type="button" data-value="small">Klein</button>
+                <button type="button" data-value="large">Groß</button>
+              </div>
+              <input type="hidden" id="weather_display" name="weather_display" value="{{ settings.weather_display }}">
+              <div class="hint">Groß: Überschrift, großes Symbol, große Temperatur und Beschreibung.</div>
+            </div>
+
+            <div class="slider-row">
+              <span class="slider-label">Größe</span>
+              <input type="range" class="slider" id="weather_size_pct" name="weather_size_pct" min="30" max="300" step="5" value="{{ settings.weather_size_pct }}">
+              <span class="slider-value" id="weather_size_pct_val">{{ settings.weather_size_pct }}%</span>
+            </div>
+            <div class="slider-row">
+              <span class="slider-label">X-Position</span>
+              <input type="range" class="slider" id="weather_x" name="weather_x" min="0" max="100" step="1" value="{{ settings.weather_x }}">
+              <span class="slider-value" id="weather_x_val">{{ settings.weather_x }}%</span>
+            </div>
+            <div class="slider-row">
+              <span class="slider-label">Y-Position</span>
+              <input type="range" class="slider" id="weather_y" name="weather_y" min="0" max="100" step="1" value="{{ settings.weather_y }}">
+              <span class="slider-value" id="weather_y_val">{{ settings.weather_y }}%</span>
+            </div>
+
+            <div class="segmented" id="weather_mode_seg">
+              <button type="button" data-value="auto">Automatisch</button>
+              <button type="button" data-value="custom">Manuell</button>
+            </div>
+            <input type="hidden" id="weather_mode" name="weather_mode" value="{{ settings.weather_mode }}">
+            <div class="hint" id="weather_mode_hint">
+              Automatisch: oben rechts.
+            </div>
+          </div>
+        </section>
+      </div>
+
       <div class="card" id="weather-data-card">
-        <h2>Wetterdaten</h2>
+        <h2>Wetter bearbeiten</h2>
         <p class="hint">
-          Die Werte werden automatisch aktualisiert. Ohne Internetverbindung
-          können sie hier manuell gepflegt werden.
+          Für jeden Tag Wetterzustand und Temperatur wählen – die passenden
+          Symbole werden automatisch angezeigt. Die Werte werden automatisch
+          aktualisiert; ohne Internetverbindung hier manuell pflegen.
         </p>
         <div class="row-btns">
           <button type="button" class="btn" id="weather-refresh-btn">Jetzt aktualisieren</button>
           <span id="weather-status" class="status"></span>
         </div>
 
-        <form id="weather-manual-form" class="manual-form">
-          <div class="manual-grid">
-            <div class="field">
-              <label for="weather_loc">Ort</label>
-              <input type="text" id="weather_loc" maxlength="120">
+        <form id="weather-manual-form">
+          <div class="weather-edit-grid">
+            <div class="day-card" data-day="today">
+              <h4>Heute</h4>
+              <label class="state-field">
+                <span class="state-icon" id="today_icon_preview"></span>
+                <select id="weather_today_state">
+                  <option value="sun">☀️ Sonnig</option>
+                  <option value="cloud-sun">🌤 Leicht bewölkt</option>
+                  <option value="cloud">☁️ Bewölkt</option>
+                  <option value="rain">🌧 Regen</option>
+                  <option value="storm">⛈ Gewitter</option>
+                  <option value="snow">❄️ Schnee</option>
+                  <option value="fog">🌫 Nebel</option>
+                </select>
+              </label>
+              <div class="temp-field">
+                <label for="weather_today_temp">Temperatur (°C)</label>
+                <input type="text" id="weather_today_temp" maxlength="16" placeholder="z. B. 23">
+              </div>
             </div>
-            <div class="field">
-              <label for="weather_today_temp">Temperatur heute (°C)</label>
-              <input type="text" id="weather_today_temp" maxlength="16">
-            </div>
-            <div class="field">
-              <label for="weather_today_desc">Wetter heute</label>
-              <input type="text" id="weather_today_desc" maxlength="120">
-            </div>
-            <div class="field">
-              <label for="weather_tomorrow_temp">Temperatur morgen (°C)</label>
-              <input type="text" id="weather_tomorrow_temp" maxlength="16">
-            </div>
-            <div class="field">
-              <label for="weather_tomorrow_desc">Wetter morgen</label>
-              <input type="text" id="weather_tomorrow_desc" maxlength="120">
+
+            <div class="day-card" data-day="tomorrow">
+              <h4>Morgen</h4>
+              <label class="state-field">
+                <span class="state-icon" id="tomorrow_icon_preview"></span>
+                <select id="weather_tomorrow_state">
+                  <option value="sun">☀️ Sonnig</option>
+                  <option value="cloud-sun">🌤 Leicht bewölkt</option>
+                  <option value="cloud">☁️ Bewölkt</option>
+                  <option value="rain">🌧 Regen</option>
+                  <option value="storm">⛈ Gewitter</option>
+                  <option value="snow">❄️ Schnee</option>
+                  <option value="fog">🌫 Nebel</option>
+                </select>
+              </label>
+              <div class="temp-field">
+                <label for="weather_tomorrow_temp">Temperatur (°C)</label>
+                <input type="text" id="weather_tomorrow_temp" maxlength="16" placeholder="z. B. 19">
+              </div>
             </div>
           </div>
-          <button type="submit" class="btn btn-primary">Manuell speichern</button>
+          <button type="submit" class="btn btn-primary">Wetter speichern</button>
           <span id="weather-manual-status" class="status"></span>
         </form>
       </div>
     </div>
 
-    <div class="card preview-card">
-      <h2>Live-Vorschau</h2>
-      <p class="hint">
-        Zeigt die Einstellungen oben in Echtzeit – noch vor dem Speichern.
-      </p>
-      <div class="preview-wrap">
-        <div class="preview-screen" id="preview-screen">
-          <div class="preview-app-name">Digital Signage</div>
-          <div class="preview-clock" id="preview-clock">
-            <span class="preview-time">12:34:56</span>
-            <span class="preview-date">Montag, 03.08.2026</span>
-          </div>
-          <div class="preview-weather" id="preview-weather">
-            <div class="weather-location">Berlin</div>
-            <div class="weather-row">
-              <span class="weather-desc">Sonnig</span>
-              <span class="weather-temp">23°</span>
+    <div class="preview-column">
+      <div class="card preview-card">
+        <h2>Live-Vorschau</h2>
+        <p class="hint">
+          Alle Änderungen werden sofort angezeigt. Widgets lassen sich im
+          Vorschaufenster per Drag &amp; Drop verschieben.
+        </p>
+        <div class="segmented" id="preview_context_seg">
+          <button type="button" data-value="media">Mit Medien</button>
+          <button type="button" data-value="empty">Ohne Medien</button>
+        </div>
+        <div class="preview-wrap">
+          <div class="preview-screen" id="preview-screen">
+            <div class="preview-app-name">Digital Signage</div>
+            <div class="preview-clock" id="preview-clock">
+              <span class="preview-time">--:--:--</span>
+              <span class="preview-date">Montag, 03.08.2026</span>
             </div>
-            <div class="weather-row">
-              <span class="weather-day">Morgen</span>
-              <span class="weather-temp">19°</span>
-            </div>
+            <div class="preview-weather" id="preview-weather"></div>
           </div>
         </div>
-      </div>
-      <div class="row-btns">
-        <a href="{{ url_for('public.display') }}" target="_blank" rel="noopener" class="btn">Vollbild öffnen ↗</a>
+        <div class="row-btns">
+          <a href="{{ url_for('public.display') }}" target="_blank" rel="noopener" class="btn">Vollbild öffnen ↗</a>
+        </div>
       </div>
     </div>
   </div>

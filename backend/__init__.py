@@ -58,6 +58,19 @@ def _migrate_schema() -> None:
         )
         db.session.commit()
 
+    # Veraltete Einstellungsschlüssel entfernen (durch Slider-Konfiguration
+    # mit Größe in Prozent und X/Y-Position ersetzt).
+    for key in (
+        "clock_size",
+        "clock_position",
+        "weather_size",
+        "weather_position",
+    ):
+        old = db.session.get(Setting, key)
+        if old is not None:
+            db.session.delete(old)
+    db.session.commit()
+
 
 def create_app(config_class=Config) -> Flask:
     """

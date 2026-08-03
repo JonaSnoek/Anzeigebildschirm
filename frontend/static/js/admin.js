@@ -319,10 +319,32 @@ if (mediaPage) {
  * ====================================================================== */
 const settingsForm = document.getElementById("settings-form");
 if (settingsForm) {
-  const status = document.getElementById("settings-status");
+  const WEATHER_ICONS = {
+    sun: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>',
+    "cloud-sun": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="6" r="3"/><path d="M18 11a4 4 0 011 7H7.5a3.5 3.5 0 01-.5-6.97 4 4 0 016-4.03h1a3.98 3.98 0 014 4z"/><path d="M11 4.2V3M5.8 6H4.5M6.5 8.5l-.9.9"/></svg>',
+    cloud: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M18 11a4 4 0 011 7H7.5a3.5 3.5 0 01-.5-6.97 4 4 0 016-4.03h1a3.98 3.98 0 014 4z"/></svg>',
+    fog: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M18 11a4 4 0 011 7H7.5a3.5 3.5 0 01-.5-6.97 4 4 0 016-4.03h1a3.98 3.98 0 014 4zM4 16h4M4 19h8M4 13h2"/></svg>',
+    rain: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M18 10a4 4 0 011 7H7.5a3.5 3.5 0 01-.5-6.97 4 4 0 016-4.03h1a3.98 3.98 0 014 4zM8 15l-1 2M13 15l-1 2M18 15l-1 2"/></svg>',
+    snow: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M18 10a4 4 0 011 7H7.5a3.5 3.5 0 01-.5-6.97 4 4 0 016-4.03h1a3.98 3.98 0 014 4zM9 15l-1 1M13 15l-1 1M17 15l-1 1M9 18l-1 1M13 18l-1 1"/></svg>',
+    storm: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M18 10a4 4 0 011 7H7.5a3.5 3.5 0 01-.5-6.97 4 4 0 016-4.03h1a3.98 3.98 0 014 4zM11 17l-1.5 3H13l-2 4"/></svg>',
+  };
+
+  const WEATHER_STATES = [
+    { id: "sun", label: "Sonnig" },
+    { id: "cloud-sun", label: "Leicht bewölkt" },
+    { id: "cloud", label: "Bewölkt" },
+    { id: "rain", label: "Regen" },
+    { id: "storm", label: "Gewitter" },
+    { id: "snow", label: "Schnee" },
+    { id: "fog", label: "Nebel" },
+  ];
+
+  const WEEKDAYS = ["Sonntag", "Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag"];
+  const pad = (n) => String(n).padStart(2, "0");
+  const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
+
   const volumeRange = settingsForm.volume;
   const volumeValue = document.getElementById("volume-value");
-
   const updateVolumeLabel = () => { if (volumeValue) volumeValue.textContent = volumeRange.value + "%"; };
   if (volumeRange) volumeRange.addEventListener("input", updateVolumeLabel);
   updateVolumeLabel();
@@ -338,86 +360,252 @@ if (settingsForm) {
       music_enabled: settingsForm.music_enabled.checked,
 
       clock_enabled: settingsForm.clock_enabled.checked,
-      clock_size: settingsForm.clock_size.value,
-      clock_position: settingsForm.clock_position.value,
+      clock_mode: settingsForm.clock_mode.value,
+      clock_x: parseInt(settingsForm.clock_x.value, 10),
+      clock_y: parseInt(settingsForm.clock_y.value, 10),
+      clock_size_pct: parseInt(settingsForm.clock_size_pct.value, 10),
       clock_interstitial: settingsForm.clock_interstitial.checked,
 
       weather_enabled: settingsForm.weather_enabled.checked,
+      weather_display: settingsForm.weather_display.value,
       weather_city: settingsForm.weather_city.value.trim(),
-      weather_position: settingsForm.weather_position.value,
-      weather_size: settingsForm.weather_size.value,
+      weather_mode: settingsForm.weather_mode.value,
+      weather_x: parseInt(settingsForm.weather_x.value, 10),
+      weather_y: parseInt(settingsForm.weather_y.value, 10),
+      weather_size_pct: parseInt(settingsForm.weather_size_pct.value, 10),
     };
     try {
       await api("/api/settings", { method: "POST", body });
-      status.classList.remove("error");
-      status.textContent = "Einstellungen gespeichert.";
       toast("Einstellungen gespeichert.", "ok");
     } catch (err) {
-      status.textContent = err.message;
-      status.classList.add("error");
+      toast(err.message, "error");
     }
   });
-}
 
-/* ---------- Live-Vorschau der Anzeige ---------- */
-const previewClock = document.getElementById("preview-clock");
-if (previewClock && settingsForm) {
-  const previewWeather = document.getElementById("preview-weather");
-  const clockSize = settingsForm.clock_size;
-  const clockPos = settingsForm.clock_position;
-  const clockEnabled = settingsForm.clock_enabled;
-  const weatherChk = settingsForm.weather_enabled;
-  const weatherPos = settingsForm.weather_position;
-  const weatherSize = settingsForm.weather_size;
-  const weatherCity = settingsForm.weather_city;
-
-  function updatePreview() {
-    previewClock.className =
-      "preview-clock size-" + (clockSize.value === "big" ? "big" : "small") +
-      " preview-pos-" + clockPos.value;
-    previewClock.style.display = clockEnabled.checked ? "" : "none";
-
-    previewWeather.className =
-      "preview-weather preview-pos-" + weatherPos.value + " size-" + weatherSize.value;
-    previewWeather.style.display = weatherChk.checked ? "" : "none";
-
-    const loc = previewWeather.querySelector(".weather-location");
-    if (loc && weatherCity.value.trim()) loc.textContent = weatherCity.value.trim();
+  /* ---------- Segmentierte Auswahl ---------- */
+  function bindSegmented(containerId, target, onChange) {
+    const container = document.getElementById(containerId);
+    if (!container || !target) return;
+    const buttons = Array.from(container.querySelectorAll("button[data-value]"));
+    const sync = () => {
+      buttons.forEach((b) => b.classList.toggle("active", b.dataset.value === target.value));
+    };
+    buttons.forEach((b) => {
+      b.addEventListener("click", () => {
+        target.value = b.dataset.value;
+        sync();
+        if (onChange) onChange(b.dataset.value);
+      });
+    });
+    sync();
   }
 
-  settingsForm.querySelectorAll("input, select").forEach((el) => {
-    el.addEventListener("input", updatePreview);
-    el.addEventListener("change", updatePreview);
-  });
-  updatePreview();
-}
+  /* ---------- Live-Vorschau ---------- */
+  const previewScreen = document.getElementById("preview-screen");
+  const previewClock = document.getElementById("preview-clock");
+  const previewWeather = document.getElementById("preview-weather");
+  const previewTime = previewClock.querySelector(".preview-time");
+  const previewDate = previewClock.querySelector(".preview-date");
+  const previewContext = { value: "media" };
+  const weatherPreviewState = {
+    today: { icon: "sun", temp: "" },
+    tomorrow: { icon: "cloud-sun", temp: "" },
+  };
 
-/* ---------- Wetterdaten verwalten ---------- */
-const weatherDataCard = document.getElementById("weather-data-card");
-if (weatherDataCard) {
+  function updateSliderFill() {
+    document.querySelectorAll("input[type=range].slider").forEach((slider) => {
+      const min = parseFloat(slider.min || 0);
+      const max = parseFloat(slider.max || 100);
+      const pct = ((parseFloat(slider.value) - min) / (max - min)) * 100;
+      slider.style.setProperty("--fill", pct + "%");
+    });
+  }
+
+  function renderPreviewWeather() {
+    const display = settingsForm.weather_display.value === "small" ? "small" : "large";
+    const city = settingsForm.weather_city.value.trim();
+    const blocks = ["today", "tomorrow"].map((key) => {
+      const d = weatherPreviewState[key] || {};
+      const label = key === "today" ? "Heute" : "Morgen";
+      const state = WEATHER_STATES.find((s) => s.id === d.icon);
+      const desc = state ? state.label : "";
+      return `
+      <div class="weather-block weather-${key}">
+        ${display === "large" ? `<div class="weather-head">${label}</div>` : ""}
+        <div class="weather-body">
+          <span class="weather-icon">${WEATHER_ICONS[d.icon] || WEATHER_ICONS.cloud}</span>
+          <div class="weather-info">
+            <span class="weather-temp">${d.temp ? esc(d.temp) + "°" : "--°"}</span>
+            ${display === "large" ? `<span class="weather-desc">${esc(desc)}</span>` : ""}
+          </div>
+          ${display === "small" ? `<span class="weather-day">${label}</span>` : ""}
+        </div>
+      </div>`;
+    }).join("");
+    previewWeather.innerHTML =
+      (city ? `<div class="weather-location">${esc(city)}</div>` : "") + blocks;
+  }
+
+  function renderPreview() {
+    const clockSize = parseInt(settingsForm.clock_size_pct.value, 10) / 100;
+    previewClock.style.display = settingsForm.clock_enabled.checked ? "" : "none";
+    previewClock.style.setProperty("--widget-scale", clockSize);
+    if (settingsForm.clock_mode.value === "custom") {
+      previewClock.className = "preview-clock preview-custom";
+      previewClock.style.left = settingsForm.clock_x.value + "%";
+      previewClock.style.top = settingsForm.clock_y.value + "%";
+    } else if (previewContext.value === "empty") {
+      previewClock.className = "preview-clock preview-empty";
+      previewClock.style.left = "";
+      previewClock.style.top = "";
+    } else {
+      previewClock.className = "preview-clock preview-media";
+      previewClock.style.left = "";
+      previewClock.style.top = "";
+    }
+
+    const weatherSize = parseInt(settingsForm.weather_size_pct.value, 10) / 100;
+    previewWeather.style.display = settingsForm.weather_enabled.checked ? "" : "none";
+    previewWeather.style.setProperty("--widget-scale", weatherSize);
+    if (settingsForm.weather_mode.value === "custom") {
+      previewWeather.className = "preview-weather preview-custom";
+      previewWeather.style.left = settingsForm.weather_x.value + "%";
+      previewWeather.style.top = settingsForm.weather_y.value + "%";
+    } else {
+      previewWeather.className = "preview-weather preview-auto";
+      previewWeather.style.left = "";
+      previewWeather.style.top = "";
+    }
+
+    renderPreviewWeather();
+    updateSliderFill();
+  }
+
+  function bindSlider(slider) {
+    const val = document.getElementById(slider.id + "_val");
+    slider.addEventListener("input", () => {
+      if (val) val.textContent = slider.value + "%";
+      renderPreview();
+    });
+  }
+
+  document.querySelectorAll("input[type=range].slider").forEach(bindSlider);
+
+  function tickPreviewClock() {
+    const n = new Date();
+    if (previewTime) previewTime.textContent = `${pad(n.getHours())}:${pad(n.getMinutes())}:${pad(n.getSeconds())}`;
+    if (previewDate) previewDate.textContent = `${WEEKDAYS[n.getDay()]}, ${pad(n.getDate())}.${pad(n.getMonth() + 1)}.${n.getFullYear()}`;
+  }
+
+  /* ---------- Drag & Drop der Widgets ---------- */
+  let dragging = null;
+  function pointToPct(clientX, clientY) {
+    const r = previewScreen.getBoundingClientRect();
+    return {
+      x: clamp(Math.round(((clientX - r.left) / r.width) * 100), 0, 100),
+      y: clamp(Math.round(((clientY - r.top) / r.height) * 100), 0, 100),
+    };
+  }
+
+  function beginDrag(e, widget) {
+    e.preventDefault();
+    if (!settingsForm[widget + "_enabled"].checked) return;
+    if (settingsForm[widget + "_mode"].value !== "custom") {
+      settingsForm[widget + "_mode"].value = "custom";
+      document.querySelectorAll("#" + widget + "_mode_seg button").forEach((b) =>
+        b.classList.toggle("active", b.dataset.value === "custom"));
+    }
+    dragging = widget;
+    applyDragPos(e.clientX, e.clientY);
+  }
+
+  function applyDragPos(clientX, clientY) {
+    if (!dragging) return;
+    const p = pointToPct(clientX, clientY);
+    settingsForm[dragging + "_x"].value = p.x;
+    settingsForm[dragging + "_y"].value = p.y;
+    renderPreview();
+  }
+
+  previewScreen.addEventListener("pointerdown", (e) => {
+    if (e.target.closest(".preview-clock")) beginDrag(e, "clock");
+    else if (e.target.closest(".preview-weather")) beginDrag(e, "weather");
+  });
+  previewScreen.addEventListener("pointermove", (e) => {
+    if (dragging) applyDragPos(e.clientX, e.clientY);
+  });
+  const endDrag = () => { dragging = null; };
+  previewScreen.addEventListener("pointerup", endDrag);
+  previewScreen.addEventListener("pointercancel", endDrag);
+
+  bindSegmented("clock_mode_seg", settingsForm.clock_mode, () => renderPreview());
+  bindSegmented("weather_mode_seg", settingsForm.weather_mode, () => renderPreview());
+  bindSegmented("weather_display_seg", settingsForm.weather_display, () => renderPreview());
+  bindSegmented("preview_context_seg", previewContext, () => renderPreview());
+
+  settingsForm.querySelectorAll("input, select").forEach((el) => {
+    el.addEventListener("input", renderPreview);
+    el.addEventListener("change", renderPreview);
+  });
+
+  tickPreviewClock();
+  setInterval(tickPreviewClock, 1000);
+  renderPreview();
+
+  /* ---------- Wetterdaten verwalten ---------- */
   const refreshBtn = document.getElementById("weather-refresh-btn");
   const weatherStatus = document.getElementById("weather-status");
   const manualForm = document.getElementById("weather-manual-form");
-  const manualStatus = document.getElementById("weather-manual-status");
 
-  const FIELDS = {
-    weather_loc: "location",
-    weather_today_temp: "today_temp",
-    weather_today_desc: "today_desc",
-    weather_tomorrow_temp: "tomorrow_temp",
-    weather_tomorrow_desc: "tomorrow_desc",
+  const stateSelects = {
+    today: document.getElementById("weather_today_state"),
+    tomorrow: document.getElementById("weather_tomorrow_state"),
   };
+  const tempInputs = {
+    today: document.getElementById("weather_today_temp"),
+    tomorrow: document.getElementById("weather_tomorrow_temp"),
+  };
+  const iconPreviews = {
+    today: document.getElementById("today_icon_preview"),
+    tomorrow: document.getElementById("tomorrow_icon_preview"),
+  };
+
+  function updateIconPreviews() {
+    ["today", "tomorrow"].forEach((key) => {
+      const icon = stateSelects[key].value;
+      if (iconPreviews[key]) iconPreviews[key].innerHTML = WEATHER_ICONS[icon] || WEATHER_ICONS.cloud;
+      weatherPreviewState[key].icon = icon;
+    });
+    renderPreviewWeather();
+  }
 
   function fillManual(w) {
     if (!w) return;
-    document.getElementById("weather_loc").value = w.location || "";
     const today = w.today || {};
     const tomorrow = w.tomorrow || {};
-    document.getElementById("weather_today_temp").value = today.temp || "";
-    document.getElementById("weather_today_desc").value = today.desc || "";
-    document.getElementById("weather_tomorrow_temp").value = tomorrow.temp || "";
-    document.getElementById("weather_tomorrow_desc").value = tomorrow.desc || "";
+    const setState = (key, iconId) => {
+      const select = stateSelects[key];
+      if (select && Array.from(select.options).some((o) => o.value === iconId)) select.value = iconId;
+    };
+    setState("today", today.icon || "sun");
+    setState("tomorrow", tomorrow.icon || "cloud-sun");
+    tempInputs.today.value = today.temp || "";
+    tempInputs.tomorrow.value = tomorrow.temp || "";
+    weatherPreviewState.today = { icon: stateSelects.today.value, temp: today.temp || "" };
+    weatherPreviewState.tomorrow = { icon: stateSelects.tomorrow.value, temp: tomorrow.temp || "" };
+    updateIconPreviews();
   }
+
+  ["today", "tomorrow"].forEach((key) => {
+    stateSelects[key].addEventListener("change", () => {
+      weatherPreviewState[key].icon = stateSelects[key].value;
+      updateIconPreviews();
+    });
+    tempInputs[key].addEventListener("input", () => {
+      weatherPreviewState[key].temp = tempInputs[key].value.trim();
+      renderPreviewWeather();
+    });
+  });
 
   async function loadWeather() {
     try {
@@ -426,44 +614,51 @@ if (weatherDataCard) {
     } catch (err) { /* kein Internet/keine Daten – Felder bleiben leer */ }
   }
 
-  refreshBtn.addEventListener("click", async () => {
-    weatherStatus.classList.remove("error");
-    weatherStatus.textContent = "Wird aktualisiert …";
-    try {
-      const city = settingsForm.weather_city.value.trim();
-      const data = await api("/api/weather/refresh", { method: "POST", body: { city } });
-      weatherStatus.textContent = "Aktualisiert.";
-      fillManual(data.weather || {});
-      toast("Wetter aktualisiert.", "ok");
-    } catch (err) {
-      weatherStatus.textContent = err.message;
-      weatherStatus.classList.add("error");
-    }
-  });
+  if (refreshBtn) {
+    refreshBtn.addEventListener("click", async () => {
+      weatherStatus.classList.remove("error");
+      weatherStatus.textContent = "Wird aktualisiert …";
+      try {
+        const city = settingsForm.weather_city.value.trim();
+        const data = await api("/api/weather/refresh", { method: "POST", body: { city } });
+        weatherStatus.textContent = "Aktualisiert.";
+        fillManual(data.weather || {});
+        toast("Wetter aktualisiert.", "ok");
+      } catch (err) {
+        weatherStatus.textContent = err.message;
+        weatherStatus.classList.add("error");
+      }
+    });
+  }
 
-  manualForm.addEventListener("submit", async (e) => {
-    e.preventDefault();
-    const body = {
-      location: document.getElementById("weather_loc").value.trim(),
-      today: {
-        temp: document.getElementById("weather_today_temp").value.trim(),
-        desc: document.getElementById("weather_today_desc").value.trim(),
-      },
-      tomorrow: {
-        temp: document.getElementById("weather_tomorrow_temp").value.trim(),
-        desc: document.getElementById("weather_tomorrow_desc").value.trim(),
-      },
-    };
-    try {
-      await api("/api/weather", { method: "POST", body });
-      manualStatus.classList.remove("error");
-      manualStatus.textContent = "Gespeichert.";
-      toast("Wetterdaten gespeichert.", "ok");
-    } catch (err) {
-      manualStatus.textContent = err.message;
-      manualStatus.classList.add("error");
-    }
-  });
+  if (manualForm) {
+    manualForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const status = document.getElementById("weather-manual-status");
+      const body = {
+        location: settingsForm.weather_city.value.trim(),
+        today: {
+          temp: tempInputs.today.value.trim(),
+          desc: (WEATHER_STATES.find((s) => s.id === stateSelects.today.value) || {}).label || "",
+          icon: stateSelects.today.value,
+        },
+        tomorrow: {
+          temp: tempInputs.tomorrow.value.trim(),
+          desc: (WEATHER_STATES.find((s) => s.id === stateSelects.tomorrow.value) || {}).label || "",
+          icon: stateSelects.tomorrow.value,
+        },
+      };
+      try {
+        await api("/api/weather", { method: "POST", body });
+        status.classList.remove("error");
+        status.textContent = "Gespeichert.";
+        toast("Wetterdaten gespeichert.", "ok");
+      } catch (err) {
+        status.textContent = err.message;
+        status.classList.add("error");
+      }
+    });
+  }
 
   loadWeather();
 }

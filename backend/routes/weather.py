@@ -21,8 +21,8 @@ def public_weather():
             "weather": weather.get_weather(settings.get("weather_city", "")),
             "settings": {
                 "weather_enabled": settings.get("weather_enabled", "false"),
-                "weather_position": settings.get("weather_position", "top-right"),
-                "weather_size": settings.get("weather_size", "medium"),
+                "weather_display": settings.get("weather_display", "large"),
+                "weather_mode": settings.get("weather_mode", "auto"),
             },
         }
     )
