@@ -43,7 +43,6 @@ Wiedergabe und Benutzer über ein dunkles, modernes Dashboard.
   - **Größe** frei skalierbar über Schieberegler (30–600 %)
   - **Position** automatisch (ohne Medien mittig, mit Medien unten rechts)
     oder **frei wählbar** über **Drag & Drop** in der Live-Vorschau
-    (Position wird sofort gespeichert)
   - **Zwischenansicht** (Interstitial): Uhr-Ansicht zwischen den Medien
   - ohne Medien: große Uhr mittig über den gesamten Bildschirm
 - **Wetter-Widget** (optional): Ort, Temperatur und Zustand für heute und
@@ -51,6 +50,11 @@ Wiedergabe und Benutzer über ein dunkles, modernes Dashboard.
   oder manuell gepflegt; **zwei Darstellungen** (klein: Symbol + Temperatur,
   groß: Überschrift, großes Symbol, Beschreibung), Größe und Position wie
   bei der Uhr frei einstellbar
+- **Explizites Speichern**: Alle Wiedergabe-Änderungen (Diashow, Uhr, Wetter,
+  Positionen, Größen, Anzeigedauer) werden erst über den gut sichtbaren
+  Button **„Einstellungen speichern“** übernommen und dann per SSE sofort an
+  alle Anzeigen verteilt – die Vorschau zeigt alle Änderungen schon vorher
+  live, nichts geht verloren
 - **Zweisprachig** (🇩🇪 Deutsch / 🇬🇧 Englisch): Wochentage, „Heute"/„Morgen"
   und Wetterzustände werden in der gewählten Sprache angezeigt – Wechsel
   per Sprach-Schalter auf der Anzeige, **ohne Neuladen**
@@ -83,11 +87,11 @@ Wiedergabe und Benutzer über ein dunkles, modernes Dashboard.
 - **Wiedergabe-Einstellungen:** Anzeigedauer, Übergang, Autoplay, Loop,
   Lautstärke, Hintergrundmusik, **Widgets** (Uhr und Wetter: aktiv,
   Größe per Schieberegler bis 600 %, Position automatisch oder per
-  **Drag & Drop** in der Vorschau, wird sofort gespeichert) – mit
-  **Live-Vorschau**, die exakt wie die Anzeige rendert (gleiche Symbole,
-  Übersetzungen, Zustände) und **dieselben Echtzeitdaten** nutzt
-  (SSE-Stream): Das aktuell laufende Medium der Anzeige erscheint
-  live in der Vorschau
+  **Drag & Drop** in der Vorschau) – mit **Live-Vorschau**, die exakt wie
+  die Anzeige rendert (gleiche Symbole, Übersetzungen, Zustände) und
+  **dieselben Echtzeitdaten** nutzt (SSE-Stream): Das aktuell laufende
+  Medium der Anzeige erscheint live in der Vorschau. Übernommen wird
+  alles erst mit dem Button **„Einstellungen speichern“**
 - **Wetterdaten:** automatisch abrufen (Open-Meteo) oder **manuell pflegen**
   (Wetterzustand + Temperatur pro Tag, Symbol wird automatisch angezeigt)
 - **Benutzerverwaltung:** Benutzer anlegen/löschen, Passwort ändern,

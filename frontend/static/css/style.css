@@ -125,6 +125,10 @@ h2 { font-size: 1.1rem; font-weight: 600; margin: 0 0 .75rem; }
 
 .btn-small { padding: .35rem .7rem; font-size: .8rem; border-radius: 8px; }
 
+.btn-lg { padding: .8rem 1.6rem; font-size: 1rem; border-radius: 12px; }
+
+.save-bar { margin-top: .2rem; }
+
 .link-btn {
   background: none;
   border: none;

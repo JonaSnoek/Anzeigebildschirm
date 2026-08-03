@@ -354,7 +354,7 @@ if (settingsForm) {
     };
     try {
       await api("/api/settings", { method: "POST", body });
-      toast("Einstellungen gespeichert.", "ok");
+      toast("Änderungen erfolgreich gespeichert.", "ok");
     } catch (err) {
       toast(err.message, "error");
     }
@@ -586,7 +586,8 @@ if (settingsForm) {
 
   document.querySelectorAll("input[type=range].slider").forEach(bindSlider);
 
-  /* ---------- Drag & Drop der Widgets (Position wird sofort gespeichert) ---------- */
+  /* ---------- Drag & Drop der Widgets (Position wird in der Vorschau gesetzt,
+   *            dauerhaft übernommen erst über „Einstellungen speichern“) ---------- */
   let dragState = null;
 
   function pointPct(clientX, clientY) {
@@ -631,23 +632,8 @@ if (settingsForm) {
     renderPreview();
   }
 
-  async function endDrag() {
-    if (!dragState) return;
-    const name = dragState.name;
+  function endDrag() {
     dragState = null;
-    try {
-      await api("/api/settings", {
-        method: "POST",
-        body: {
-          [name + "_mode"]: "custom",
-          [name + "_x"]: parseInt(settingsForm[name + "_x"].value, 10),
-          [name + "_y"]: parseInt(settingsForm[name + "_y"].value, 10),
-        },
-      });
-      toast("Position gespeichert.", "ok");
-    } catch (err) {
-      toast(err.message, "error");
-    }
   }
 
   previewScreen.addEventListener("pointerdown", (e) => {

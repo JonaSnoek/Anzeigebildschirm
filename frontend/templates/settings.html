@@ -7,9 +7,9 @@
 
   <div class="settings-layout">
     <div>
+      <form id="settings-form">
       <div class="card">
-        <form id="settings-form">
-          <h2>Diashow &amp; Ton</h2>
+        <h2>Diashow &amp; Ton</h2>
           <div class="field">
             <label for="slide_duration">Anzeigedauer pro Bild (Sekunden)</label>
             <input type="number" id="slide_duration" name="slide_duration" min="3" max="300" value="{{ settings.slide_duration }}">
@@ -43,7 +43,6 @@
             <input type="checkbox" id="music_enabled" name="music_enabled" {{ 'checked' if settings.music_enabled == 'true' }}>
             <label for="music_enabled">Hintergrundmusik abspielen</label>
           </div>
-        </form>
       </div>
 
       <div class="card">
@@ -145,6 +144,11 @@
         </section>
       </div>
 
+      <div class="row-btns save-bar">
+        <button type="submit" class="btn btn-primary btn-lg">Einstellungen speichern</button>
+      </div>
+      </form>
+
       <div class="card" id="weather-data-card">
         <h2>Wetter bearbeiten</h2>
         <p class="hint">
@@ -211,9 +215,10 @@
       <div class="card preview-card">
         <h2>Live-Vorschau</h2>
         <p class="hint">
-          Zeigt exakt den späteren Anzeigebildschirm. Alle Änderungen werden
-          sofort übernommen – Widgets lassen sich direkt im Vorschaufenster
-          per Drag &amp; Drop verschieben (Position wird sofort gespeichert).
+          Zeigt exakt den späteren Anzeigebildschirm. Änderungen werden sofort
+          in der Vorschau übernommen, dauerhaft aber erst nach dem Klick auf
+          „Einstellungen speichern“. Widgets lassen sich direkt im Vorschaufenster
+          per Drag &amp; Drop verschieben.
         </p>
         <div class="segmented" id="preview_context_seg">
           <button type="button" data-value="media">Mit Medien</button>
