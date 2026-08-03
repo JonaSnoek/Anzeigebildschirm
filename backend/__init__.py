@@ -63,6 +63,25 @@ def _migrate_schema() -> None:
         )
         db.session.commit()
 
+    # Wetter-Widget: neue Spalten für Höchst-/Mindesttemperatur und
+    # Tagesverlauf (Morgen/Mittag/Abend).
+    try:
+        weather_columns = {c["name"] for c in inspector.get_columns("weather_data")}
+    except Exception:
+        weather_columns = set()
+    weather_additions = {
+        "today_temp_max": "ALTER TABLE weather_data ADD COLUMN today_temp_max VARCHAR(16) NOT NULL DEFAULT ''",
+        "today_temp_min": "ALTER TABLE weather_data ADD COLUMN today_temp_min VARCHAR(16) NOT NULL DEFAULT ''",
+        "tomorrow_temp_max": "ALTER TABLE weather_data ADD COLUMN tomorrow_temp_max VARCHAR(16) NOT NULL DEFAULT ''",
+        "tomorrow_temp_min": "ALTER TABLE weather_data ADD COLUMN tomorrow_temp_min VARCHAR(16) NOT NULL DEFAULT ''",
+        "today_course": "ALTER TABLE weather_data ADD COLUMN today_course TEXT NOT NULL DEFAULT ''",
+        "tomorrow_course": "ALTER TABLE weather_data ADD COLUMN tomorrow_course TEXT NOT NULL DEFAULT ''",
+    }
+    for col, sql in weather_additions.items():
+        if col not in weather_columns:
+            db.session.execute(db.text(sql))
+            db.session.commit()
+
     # Veraltete Einstellungsschlüssel entfernen (durch Slider-Konfiguration
     # mit Größe in Prozent und X/Y-Position ersetzt).
     for key in (

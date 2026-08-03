@@ -71,14 +71,18 @@
       clockX: toInt(s.clock_x, 50, 0, 100),
       clockY: toInt(s.clock_y, 50, 0, 100),
       clockSizePct: toInt(s.clock_size_pct, 100, 30, 600) / 100,
+      clockBigSizePct: toInt(s.clock_big_size_pct, 100, 30, 600) / 100,
       interstitial: s.clock_interstitial === "true",
 
       weatherEnabled: s.weather_enabled !== "false",
-      weatherDisplay: s.weather_display === "small" ? "small" : "large",
+      weatherDisplay: ["small", "medium", "large"].indexOf(s.weather_display) >= 0
+        ? s.weather_display
+        : "large",
       weatherMode: s.weather_mode === "custom" ? "custom" : "auto",
       weatherX: toInt(s.weather_x, 50, 0, 100),
       weatherY: toInt(s.weather_y, 50, 0, 100),
       weatherSizePct: toInt(s.weather_size_pct, 100, 30, 600) / 100,
+      weatherBigSizePct: toInt(s.weather_big_size_pct, 100, 30, 600) / 100,
     };
   }
 
@@ -97,7 +101,7 @@
     const c = cfg();
 
     CLOCK_SCREEN.classList.toggle("no-clock", !c.clockEnabled);
-    CLOCK_BLOCK.style.setProperty("--widget-scale", c.clockSizePct);
+    CLOCK_BLOCK.style.setProperty("--widget-scale", c.clockBigSizePct);
     if (c.clockMode === "custom") {
       CLOCK_BLOCK.classList.add("clock-custom");
       CLOCK_BLOCK.style.left = c.clockX + "%";
@@ -125,20 +129,29 @@
   }
 
   /* ---------- Wetter ---------- */
+  // Zwei Darstellungen: groß (Leerzustand/Interstitial, bildschirmfüllend,
+  // mittig) und als Widget (während der Medien, frei positionierbar).
   function applyWeather() {
     const c = cfg();
-    const display = c.weatherDisplay === "small" ? "small" : "large";
-    WEATHER.className = "widget-weather weather-" + display;
-    WEATHER.classList.remove("hidden");
-    WEATHER.style.setProperty("--widget-scale", c.weatherSizePct);
-    if (c.weatherMode === "custom") {
-      WEATHER.classList.add("weather-custom");
-      WEATHER.style.left = c.weatherX + "%";
-      WEATHER.style.top = c.weatherY + "%";
-    } else {
-      WEATHER.classList.add("weather-auto");
+    const idle = currentKey === "idle";
+
+    if (idle) {
+      WEATHER.className = "widget-weather weather-screen";
       WEATHER.style.left = "";
       WEATHER.style.top = "";
+      WEATHER.style.setProperty("--widget-scale", c.weatherBigSizePct);
+    } else {
+      WEATHER.className = "widget-weather weather-" + c.weatherDisplay;
+      WEATHER.style.setProperty("--widget-scale", c.weatherSizePct);
+      if (c.weatherMode === "custom") {
+        WEATHER.classList.add("weather-custom");
+        WEATHER.style.left = c.weatherX + "%";
+        WEATHER.style.top = c.weatherY + "%";
+      } else {
+        WEATHER.classList.add("weather-auto");
+        WEATHER.style.left = "";
+        WEATHER.style.top = "";
+      }
     }
 
     if (!c.weatherEnabled || !state.weather || !state.weather.location) {
@@ -146,6 +159,9 @@
       WEATHER.innerHTML = "";
       return;
     }
+    WEATHER.classList.remove("hidden");
+    // Große Ansicht zeigt immer die volle Darstellung (inkl. Tagesverlauf).
+    const display = idle ? "large" : c.weatherDisplay;
     WEATHER.innerHTML = Signage.weatherMarkup(state.weather, display, lang);
   }
 
@@ -253,6 +269,7 @@
     PLAYER.classList.add("hidden");
     CLOCK_SCREEN.classList.remove("hidden");
     applyClock();
+    applyWeather();
   }
 
   function showSlot(slot) {
@@ -268,6 +285,8 @@
     currentKey = key;
     CLOCK_SCREEN.classList.add("hidden");
     PLAYER.classList.remove("hidden");
+    applyClock();
+    applyWeather();
     if (slot.type === "video") renderVideo(slot);
     else renderImage(slot);
   }

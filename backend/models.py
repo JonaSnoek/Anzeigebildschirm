@@ -7,6 +7,7 @@ Datenbank-Modelle.
 - WeatherData:  gecachte Wetterdaten für das Wetter-Widget
 """
 
+import json
 from datetime import datetime, timezone
 
 import bcrypt
@@ -120,33 +121,57 @@ class WeatherData(db.Model):
 
     # Heute
     today_temp = db.Column(String(16), nullable=False, default="")
+    today_temp_max = db.Column(String(16), nullable=False, default="")
+    today_temp_min = db.Column(String(16), nullable=False, default="")
     today_desc = db.Column(String(120), nullable=False, default="")
     today_icon = db.Column(String(32), nullable=False, default="")
+    today_course = db.Column(Text, nullable=False, default="")
 
     # Morgen
     tomorrow_temp = db.Column(String(16), nullable=False, default="")
+    tomorrow_temp_max = db.Column(String(16), nullable=False, default="")
+    tomorrow_temp_min = db.Column(String(16), nullable=False, default="")
     tomorrow_desc = db.Column(String(120), nullable=False, default="")
     tomorrow_icon = db.Column(String(32), nullable=False, default="")
+    tomorrow_course = db.Column(Text, nullable=False, default="")
+
+    def _course(self, prefix: str) -> list:
+        """Tagesverlauf aus dem JSON-Spalteninhalt (oder leer)."""
+        raw = getattr(self, prefix + "_course")
+        if not raw:
+            return []
+        try:
+            value = json.loads(raw)
+            return value if isinstance(value, list) else []
+        except (TypeError, ValueError):
+            return []
 
     def to_dict(self) -> dict:
         """Serielles Format für die API.
 
         ``state`` ist der sprachunabhängige Zustands-Schlüssel (z. B. ``sun``,
         ``cloud``, ``showers``). ``icon`` bleibt als Abwärtskompatibilität.
+        Höchst-/Mindesttemperatur fallen auf die aktuelle Temperatur zurück,
+        falls keine Tageswerte vorhanden sind (z. B. alte oder manuelle Daten).
         """
+        def _day(prefix: str) -> dict:
+            temp = getattr(self, prefix + "_temp")
+            temp_max = getattr(self, prefix + "_temp_max") or temp
+            temp_min = getattr(self, prefix + "_temp_min") or temp
+            icon = getattr(self, prefix + "_icon")
+            return {
+                "temp": temp,
+                "temp_max": temp_max,
+                "temp_min": temp_min,
+                "desc": getattr(self, prefix + "_desc"),
+                "icon": icon,
+                "state": icon,
+                "course": self._course(prefix),
+            }
+
         return {
             "location": self.location,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
-            "today": {
-                "temp": self.today_temp,
-                "desc": self.today_desc,
-                "icon": self.today_icon,
-                "state": self.today_icon,
-            },
-            "tomorrow": {
-                "temp": self.tomorrow_temp,
-                "desc": self.tomorrow_desc,
-                "icon": self.tomorrow_icon,
-                "state": self.tomorrow_icon,
-            },
+            "today": _day("today"),
+            "tomorrow": _day("tomorrow"),
         }

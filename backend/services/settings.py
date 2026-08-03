@@ -30,16 +30,18 @@ ALLOWED = {
     "clock_x": ("int", 0, 100),
     "clock_y": ("int", 0, 100),
     "clock_size_pct": ("int", 30, 600),
+    "clock_big_size_pct": ("int", 30, 600),
     "clock_interstitial": ("bool",),
 
     # Wetter-Widget
     "weather_enabled": ("bool",),
-    "weather_display": ("choice", ["small", "large"]),
+    "weather_display": ("choice", ["small", "medium", "large"]),
     "weather_city": ("str", 120),
     "weather_mode": ("choice", ["auto", "custom"]),
     "weather_x": ("int", 0, 100),
     "weather_y": ("int", 0, 100),
     "weather_size_pct": ("int", 30, 600),
+    "weather_big_size_pct": ("int", 30, 600),
 }
 
 

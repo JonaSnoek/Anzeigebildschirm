@@ -85,17 +85,19 @@ class Config:
         "clock_mode": "auto",           # auto | custom (X/Y-Position)
         "clock_x": "50",                # 0–100 (% horizontale Position, nur custom)
         "clock_y": "50",                # 0–100 (% vertikale Position, nur custom)
-        "clock_size_pct": "100",        # 30–300 (% Skalierung über Schieberegler)
+        "clock_size_pct": "100",        # 30–600 (% Skalierung des Uhr-Widgets bei Medien)
+        "clock_big_size_pct": "100",    # 30–600 (% Skalierung der großen Uhr-Ansicht ohne Medien)
         "clock_interstitial": "false",  # Uhr-Ansicht zwischen den Medien einblenden
 
         # Wetter-Widget
         "weather_enabled": "false",     # Wetter-Widget anzeigen
-        "weather_display": "large",     # small | large (Darstellung)
+        "weather_display": "large",     # small | medium | large (Darstellung)
         "weather_city": "",             # Ortsname für das Wetter (z. B. "Berlin")
         "weather_mode": "auto",         # auto | custom (X/Y-Position)
         "weather_x": "50",              # 0–100 (% horizontale Position, nur custom)
         "weather_y": "50",              # 0–100 (% vertikale Position, nur custom)
-        "weather_size_pct": "100",      # 30–300 (% Skalierung über Schieberegler)
+        "weather_size_pct": "100",      # 30–600 (% Skalierung des Wetter-Widgets bei Medien)
+        "weather_big_size_pct": "100",  # 30–600 (% Skalierung der großen Wetter-Ansicht ohne Medien)
     }
 
     # ---- Wetter -------------------------------------------------------------

@@ -342,6 +342,7 @@ if (settingsForm) {
       clock_x: parseInt(settingsForm.clock_x.value, 10),
       clock_y: parseInt(settingsForm.clock_y.value, 10),
       clock_size_pct: parseInt(settingsForm.clock_size_pct.value, 10),
+      clock_big_size_pct: parseInt(settingsForm.clock_big_size_pct.value, 10),
       clock_interstitial: settingsForm.clock_interstitial.checked,
 
       weather_enabled: settingsForm.weather_enabled.checked,
@@ -351,6 +352,7 @@ if (settingsForm) {
       weather_x: parseInt(settingsForm.weather_x.value, 10),
       weather_y: parseInt(settingsForm.weather_y.value, 10),
       weather_size_pct: parseInt(settingsForm.weather_size_pct.value, 10),
+      weather_big_size_pct: parseInt(settingsForm.weather_big_size_pct.value, 10),
     };
     try {
       await api("/api/settings", { method: "POST", body });
@@ -389,8 +391,8 @@ if (settingsForm) {
   const previewContext = { value: "media" };
 
   const weatherPreviewState = {
-    today: { icon: "sun", temp: "" },
-    tomorrow: { icon: "cloud-sun", temp: "" },
+    today: { icon: "sun", temp_max: "", temp_min: "" },
+    tomorrow: { icon: "cloud-sun", temp_max: "", temp_min: "" },
   };
 
   function previewLang() {
@@ -406,6 +408,7 @@ if (settingsForm) {
       x: parseInt(f[name + "_x"].value, 10),
       y: parseInt(f[name + "_y"].value, 10),
       sizePct: parseInt(f[name + "_size_pct"].value, 10),
+      bigSizePct: parseInt(f[name + "_big_size_pct"].value, 10),
     };
   }
 
@@ -432,17 +435,25 @@ if (settingsForm) {
     });
   }
 
+  function previewIdle() {
+    // Große Ansicht: "Ohne Medien"-Modus oder aktueller Timeline-Slot ist
+    // eine Uhr-Ansicht (Interstitial) – exakt wie auf dem echten Display.
+    return previewContext.value === "empty"
+      || (previewContext.value === "media" && liveSlotState && liveSlotState.type === "clock");
+  }
+
   function renderPreview() {
     syncPreviewSize();
+    computeLiveSlot();
     const lang = previewLang();
     const clock = widgetCfg("clock");
     const weather = widgetCfg("weather");
-    const media = previewContext.value === "media";
+    const idle = previewIdle();
 
     // Große Uhr-Ansicht (ohne Medien / Interstitial)
-    previewClockScreen.classList.toggle("hidden", media);
+    previewClockScreen.classList.toggle("hidden", !idle);
     previewClockScreen.classList.toggle("no-clock", !clock.enabled);
-    previewClockBlock.style.setProperty("--widget-scale", clock.sizePct / 100);
+    previewClockBlock.style.setProperty("--widget-scale", clock.bigSizePct / 100);
     previewClockBlock.classList.toggle("clock-custom", clock.mode === "custom");
     if (clock.mode === "custom") {
       previewClockBlock.style.left = clock.x + "%";
@@ -462,21 +473,30 @@ if (settingsForm) {
       previewClock.style.left = "";
       previewClock.style.top = "";
     }
-    previewClock.classList.toggle("hidden", !media || !clock.enabled);
+    previewClock.classList.toggle("hidden", idle || !clock.enabled);
 
-    // Wetter-Widget
-    const display = settingsForm.weather_display.value === "small" ? "small" : "large";
-    previewWeather.style.setProperty("--widget-scale", weather.sizePct / 100);
-    previewWeather.className = "widget-weather embedded weather-" + display + " weather-" + weather.mode;
-    if (weather.mode === "custom") {
-      previewWeather.style.left = weather.x + "%";
-      previewWeather.style.top = weather.y + "%";
-    } else {
+    // Wetter: groß (Leerzustand) oder als Widget (während der Medien)
+    const display = ["small", "medium", "large"].indexOf(settingsForm.weather_display.value) >= 0
+      ? settingsForm.weather_display.value
+      : "large";
+    if (idle) {
+      previewWeather.style.setProperty("--widget-scale", weather.bigSizePct / 100);
+      previewWeather.className = "widget-weather embedded weather-screen";
       previewWeather.style.left = "";
       previewWeather.style.top = "";
+    } else {
+      previewWeather.style.setProperty("--widget-scale", weather.sizePct / 100);
+      previewWeather.className = "widget-weather embedded weather-" + display + " weather-" + weather.mode;
+      if (weather.mode === "custom") {
+        previewWeather.style.left = weather.x + "%";
+        previewWeather.style.top = weather.y + "%";
+      } else {
+        previewWeather.style.left = "";
+        previewWeather.style.top = "";
+      }
     }
     previewWeather.classList.toggle("hidden", !weather.enabled);
-    previewWeather.innerHTML = Signage.weatherMarkup(weatherPreviewData(), display, lang);
+    previewWeather.innerHTML = Signage.weatherMarkup(weatherPreviewData(), idle ? "large" : display, lang);
 
     updatePreviewClock();
     updateLiveMedia();
@@ -487,40 +507,33 @@ if (settingsForm) {
   const liveState = { timeline: null };
   let liveSkew = 0;
   let liveMediaKey = null;
+  let liveSlotState = null;
 
   function liveNow() {
     return Date.now() / 1000 + liveSkew;
   }
 
-  function liveSlot() {
+  function computeLiveSlot() {
     const tl = liveState.timeline;
-    if (!tl || !tl.items || tl.items.length === 0) return null;
+    if (!tl || !tl.items || tl.items.length === 0) { liveSlotState = null; return; }
     const t = liveNow();
-    if (!tl.loop && t >= tl.cycle_start + tl.cycle_duration) return null;
+    if (!tl.loop && t >= tl.cycle_start + tl.cycle_duration) { liveSlotState = null; return; }
     const phase = (((t - tl.cycle_start) % tl.cycle_duration) + tl.cycle_duration) % tl.cycle_duration;
     for (const item of tl.items) {
-      if (phase >= item.start && phase < item.end) return item;
+      if (phase >= item.start && phase < item.end) { liveSlotState = item; return; }
     }
-    return tl.items[tl.items.length - 1];
+    liveSlotState = tl.items[tl.items.length - 1];
   }
 
   function updateLiveMedia() {
     if (!previewMedia) return;
-    const mediaMode = previewContext.value === "media";
-    const slot = mediaMode ? liveSlot() : null;
-    if (!mediaMode || !slot) {
+    const slot = previewContext.value === "media" ? liveSlotState : null;
+    const idle = previewIdle();
+    if (!slot || idle) {
       previewMedia.innerHTML = "";
       liveMediaKey = null;
       return;
     }
-    if (slot.type === "clock") {
-      previewMedia.innerHTML = "";
-      liveMediaKey = null;
-      previewClockScreen.classList.remove("hidden");
-      updatePreviewClock();
-      return;
-    }
-    previewClockScreen.classList.add("hidden");
     const key = slot.type + ":" + slot.id;
     if (key === liveMediaKey) {
       const video = previewMedia.querySelector("video");
@@ -552,17 +565,17 @@ if (settingsForm) {
       const message = JSON.parse(event.data);
       if (typeof message.ts === "number") liveSkew = message.ts - Date.now() / 1000;
       if (message.data && message.data.timeline) liveState.timeline = message.data.timeline;
-      updateLiveMedia();
+      renderPreview();
     } catch (err) {}
   });
   liveSource.onerror = function () {};
-  setInterval(updateLiveMedia, 1000);
+  setInterval(renderPreview, 1000);
   fetch("/api/display", { cache: "no-store" })
     .then((res) => res.json())
     .then((data) => {
       if (typeof data.server_time === "number") liveSkew = data.server_time - Date.now() / 1000;
       if (data && data.timeline) liveState.timeline = data.timeline;
-      updateLiveMedia();
+      renderPreview();
     })
     .catch(function () {});
 
@@ -640,9 +653,10 @@ if (settingsForm) {
     const big = e.target.closest("#preview-clock-screen .clock-screen-block");
     const overlay = e.target.closest("#preview-clock");
     const weather = e.target.closest("#preview-weather");
-    if (big && previewContext.value === "empty") beginDrag(e, "clock", big);
-    else if (overlay && previewContext.value === "media") beginDrag(e, "clock", overlay);
-    else if (weather) beginDrag(e, "weather", weather);
+    const idle = previewIdle();
+    if (big && idle) beginDrag(e, "clock", big);
+    else if (overlay && !idle) beginDrag(e, "clock", overlay);
+    else if (weather && !idle) beginDrag(e, "weather", weather);
   });
   window.addEventListener("pointermove", moveDrag);
   window.addEventListener("pointerup", () => endDrag());
@@ -679,8 +693,16 @@ if (settingsForm) {
     tomorrow: document.getElementById("weather_tomorrow_state"),
   };
   const tempInputs = {
-    today: document.getElementById("weather_today_temp"),
-    tomorrow: document.getElementById("weather_tomorrow_temp"),
+    todayMax: document.getElementById("weather_today_temp_max"),
+    todayMin: document.getElementById("weather_today_temp_min"),
+    tomorrowMax: document.getElementById("weather_tomorrow_temp_max"),
+    tomorrowMin: document.getElementById("weather_tomorrow_temp_min"),
+  };
+  const tempPreview = {
+    todayMax: ["today", "temp_max"],
+    todayMin: ["today", "temp_min"],
+    tomorrowMax: ["tomorrow", "temp_max"],
+    tomorrowMin: ["tomorrow", "temp_min"],
   };
   const iconPreviews = {
     today: document.getElementById("today_icon_preview"),
@@ -706,10 +728,22 @@ if (settingsForm) {
     };
     setState("today", today.state || today.icon || "sun");
     setState("tomorrow", tomorrow.state || tomorrow.icon || "cloud-sun");
-    tempInputs.today.value = today.temp || "";
-    tempInputs.tomorrow.value = tomorrow.temp || "";
-    weatherPreviewState.today = { icon: stateSelects.today.value, temp: today.temp || "" };
-    weatherPreviewState.tomorrow = { icon: stateSelects.tomorrow.value, temp: tomorrow.temp || "" };
+    tempInputs.todayMax.value = today.temp_max || "";
+    tempInputs.todayMin.value = today.temp_min || "";
+    tempInputs.tomorrowMax.value = tomorrow.temp_max || "";
+    tempInputs.tomorrowMin.value = tomorrow.temp_min || "";
+    weatherPreviewState.today = {
+      icon: stateSelects.today.value,
+      temp_max: today.temp_max || today.temp || "",
+      temp_min: today.temp_min || today.temp || "",
+      course: today.course || [],
+    };
+    weatherPreviewState.tomorrow = {
+      icon: stateSelects.tomorrow.value,
+      temp_max: tomorrow.temp_max || tomorrow.temp || "",
+      temp_min: tomorrow.temp_min || tomorrow.temp || "",
+      course: tomorrow.course || [],
+    };
     updateIconPreviews();
   }
 
@@ -718,8 +752,11 @@ if (settingsForm) {
       weatherPreviewState[key].icon = stateSelects[key].value;
       updateIconPreviews();
     });
+  });
+  Object.keys(tempInputs).forEach((key) => {
     tempInputs[key].addEventListener("input", () => {
-      weatherPreviewState[key].temp = tempInputs[key].value.trim();
+      const [day, field] = tempPreview[key];
+      weatherPreviewState[day][field] = tempInputs[key].value.trim();
       renderPreview();
     });
   });
@@ -755,12 +792,16 @@ if (settingsForm) {
       const body = {
         location: settingsForm.weather_city.value.trim(),
         today: {
-          temp: tempInputs.today.value.trim(),
+          temp: tempInputs.todayMax.value.trim() || tempInputs.todayMin.value.trim(),
+          temp_max: tempInputs.todayMax.value.trim(),
+          temp_min: tempInputs.todayMin.value.trim(),
           desc: (Signage.WEATHER_STATES.find((s) => s.id === stateSelects.today.value) || {}).label || "",
           icon: stateSelects.today.value,
         },
         tomorrow: {
-          temp: tempInputs.tomorrow.value.trim(),
+          temp: tempInputs.tomorrowMax.value.trim() || tempInputs.tomorrowMin.value.trim(),
+          temp_max: tempInputs.tomorrowMax.value.trim(),
+          temp_min: tempInputs.tomorrowMin.value.trim(),
           desc: (Signage.WEATHER_STATES.find((s) => s.id === stateSelects.tomorrow.value) || {}).label || "",
           icon: stateSelects.tomorrow.value,
         },

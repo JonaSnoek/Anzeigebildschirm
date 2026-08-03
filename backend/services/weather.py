@@ -96,6 +96,7 @@ def _fetch(city: str) -> dict:
             "latitude": lat,
             "longitude": lon,
             "current": "temperature_2m,weather_code",
+            "hourly": "temperature_2m,weather_code",
             "daily": "weather_code,temperature_2m_max,temperature_2m_min",
             "timezone": "auto",
             "forecast_days": 2,
@@ -104,7 +105,11 @@ def _fetch(city: str) -> dict:
 
     current = data.get("current", {})
     daily = data.get("daily", {})
+    hourly = data.get("hourly", {})
     codes = daily.get("weather_code") or []
+    maxes = daily.get("temperature_2m_max") or []
+    mins = daily.get("temperature_2m_min") or []
+    daily_dates = daily.get("time") or []
 
     today_desc, today_state = _describe(current.get("weather_code"))
     tomorrow_desc, tomorrow_state = _describe(codes[1] if len(codes) > 1 else 0)
@@ -115,21 +120,62 @@ def _fetch(city: str) -> dict:
         except (TypeError, ValueError):
             return fallback
 
+    def _course(day: str) -> list:
+        """Tagesverlauf (Morgen/Mittag/Abend) aus den Stundenwerten."""
+        if not day:
+            return []
+        times = hourly.get("time") or []
+        temps = hourly.get("temperature_2m") or []
+        hcodes = hourly.get("weather_code") or []
+        slots = []
+        for i, ts in enumerate(times):
+            if not ts.startswith(day):
+                continue
+            try:
+                hour = int(ts[11:13])
+            except (TypeError, ValueError, IndexError):
+                continue
+            slots.append(
+                {
+                    "hour": hour,
+                    "temp": _round(temps[i]) if i < len(temps) else "",
+                    "state": _describe(hcodes[i] if i < len(hcodes) else 0)[1],
+                }
+            )
+        if not slots:
+            return []
+        result = []
+        for label, target in (("morning", 9), ("noon", 13), ("evening", 18)):
+            nearest = min(slots, key=lambda s: abs(s["hour"] - target))
+            result.append(
+                {"period": label, "temp": nearest["temp"], "state": nearest["state"]}
+            )
+        return result
+
+    today_max = _round(maxes[0] if maxes else None)
+    today_min = _round(mins[0] if mins else None)
+    tomorrow_max = _round(maxes[1] if len(maxes) > 1 else None)
+    tomorrow_min = _round(mins[1] if len(mins) > 1 else None)
+    today_date = daily_dates[0] if daily_dates else ""
+    tomorrow_date = daily_dates[1] if len(daily_dates) > 1 else ""
+
     return {
         "location": resolved,
         "today": {
             "temp": _round(current.get("temperature_2m")),
+            "temp_max": today_max,
+            "temp_min": today_min,
             "desc": today_desc,
             "state": today_state,
+            "course": _course(today_date),
         },
         "tomorrow": {
-            "temp": _round(
-                daily.get("temperature_2m_max", [None])[0]
-                if daily.get("temperature_2m_max")
-                else None
-            ),
+            "temp": tomorrow_max or "",
+            "temp_max": tomorrow_max,
+            "temp_min": tomorrow_min,
             "desc": tomorrow_desc,
             "state": tomorrow_state,
+            "course": _course(tomorrow_date),
         },
     }
 
@@ -148,14 +194,27 @@ def _store(data: dict) -> WeatherData:
         row = WeatherData()
         db.session.add(row)
 
+    def _value(section, key):
+        return str((data.get(section) or {}).get(key) or "").strip()[:16]
+
     row.location = data.get("location", "")[:120]
     row.updated_at = datetime.now(timezone.utc)
-    row.today_temp = data["today"]["temp"]
-    row.today_desc = data["today"]["desc"][:120]
+    row.today_temp = _value("today", "temp") or _value("today", "temp_max")
+    row.today_temp_max = _value("today", "temp_max")
+    row.today_temp_min = _value("today", "temp_min")
+    row.today_desc = str(data["today"].get("desc") or "")[:120]
     row.today_icon = (data["today"].get("state") or data["today"].get("icon") or "")[:32]
-    row.tomorrow_temp = data["tomorrow"]["temp"]
-    row.tomorrow_desc = data["tomorrow"]["desc"][:120]
+    row.tomorrow_temp = _value("tomorrow", "temp") or _value("tomorrow", "temp_max")
+    row.tomorrow_temp_max = _value("tomorrow", "temp_max")
+    row.tomorrow_temp_min = _value("tomorrow", "temp_min")
+    row.tomorrow_desc = str(data["tomorrow"].get("desc") or "")[:120]
     row.tomorrow_icon = (data["tomorrow"].get("state") or data["tomorrow"].get("icon") or "")[:32]
+    # Tagesverlauf nur überschreiben, wenn er mitgeliefert wurde (manuelle
+    # Bearbeitung soll zuvor abgerufene API-Werte nicht verwerfen).
+    for prefix in ("today", "tomorrow"):
+        course = (data.get(prefix) or {}).get("course")
+        if course is not None:
+            setattr(row, prefix + "_course", json.dumps(course, ensure_ascii=False))
     db.session.commit()
     return row
 
@@ -177,8 +236,8 @@ def _empty(city: str = "") -> dict:
     return {
         "location": city,
         "updated_at": None,
-        "today": {"temp": "", "desc": "Keine Daten", "icon": "cloud"},
-        "tomorrow": {"temp": "", "desc": "Keine Daten", "icon": "cloud"},
+        "today": {"temp": "", "temp_max": "", "temp_min": "", "desc": "Keine Daten", "icon": "cloud", "course": []},
+        "tomorrow": {"temp": "", "temp_max": "", "temp_min": "", "desc": "Keine Daten", "icon": "cloud", "course": []},
     }
 
 
@@ -226,21 +285,33 @@ def save_manual(data: dict) -> dict:
         value = (data.get(section) or {}).get(key)
         return default if value is None else str(value).strip()[:120]
 
+    def _value(section, key, default=""):
+        value = (data.get(section) or {}).get(key)
+        return default if value is None else str(value).strip()[:16]
+
     def _state(section):
         value = _pick(section, "state") or _pick(section, "icon", "cloud")
         return value[:32]
 
+    today = {
+        "temp": _value("today", "temp") or _value("today", "temp_max")
+        or str(data.get("today_temp") or "")[:16],
+        "temp_max": _value("today", "temp_max"),
+        "temp_min": _value("today", "temp_min"),
+        "desc": _pick("today", "desc"),
+        "state": _state("today"),
+    }
+    tomorrow = {
+        "temp": _value("tomorrow", "temp") or _value("tomorrow", "temp_max")
+        or str(data.get("tomorrow_temp") or "")[:16],
+        "temp_max": _value("tomorrow", "temp_max"),
+        "temp_min": _value("tomorrow", "temp_min"),
+        "desc": _pick("tomorrow", "desc"),
+        "state": _state("tomorrow"),
+    }
     payload = {
         "location": str(data.get("location") or "").strip()[:120],
-        "today": {
-            "temp": str(data.get("today_temp") or data.get("today", {}).get("temp") or "")[:16],
-            "desc": _pick("today", "desc"),
-            "state": _state("today"),
-        },
-        "tomorrow": {
-            "temp": str(data.get("tomorrow_temp") or data.get("tomorrow", {}).get("temp") or "")[:16],
-            "desc": _pick("tomorrow", "desc"),
-            "state": _state("tomorrow"),
-        },
+        "today": today,
+        "tomorrow": tomorrow,
     }
     return _store(payload).to_dict()

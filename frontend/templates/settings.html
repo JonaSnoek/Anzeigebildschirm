@@ -63,9 +63,19 @@
 
           <div class="widget-body">
             <div class="slider-row">
-              <span class="slider-label">Größe</span>
+              <span class="slider-label">Größe (bei Medien)</span>
               <input type="range" class="slider" id="clock_size_pct" name="clock_size_pct" min="30" max="600" step="5" value="{{ settings.clock_size_pct }}">
               <span class="slider-value" id="clock_size_pct_val">{{ settings.clock_size_pct }}%</span>
+            </div>
+
+            <div class="slider-row">
+              <span class="slider-label">Größe große Ansicht</span>
+              <input type="range" class="slider" id="clock_big_size_pct" name="clock_big_size_pct" min="30" max="600" step="5" value="{{ settings.clock_big_size_pct }}">
+              <span class="slider-value" id="clock_big_size_pct_val">{{ settings.clock_big_size_pct }}%</span>
+            </div>
+            <div class="hint">
+              Große Ansicht: ohne Medien mittig auf dem Bildschirm. Bei Medien
+              gilt „Größe (bei Medien)“ für das kleine Widget unten rechts.
             </div>
 
             <div class="segmented" id="clock_mode_seg">
@@ -115,16 +125,27 @@
               <label>Darstellung</label>
               <div class="segmented" id="weather_display_seg">
                 <button type="button" data-value="small">Klein</button>
+                <button type="button" data-value="medium">Mittel</button>
                 <button type="button" data-value="large">Groß</button>
               </div>
               <input type="hidden" id="weather_display" name="weather_display" value="{{ settings.weather_display }}">
-              <div class="hint">Groß: Überschrift, großes Symbol, große Temperatur und Beschreibung.</div>
+              <div class="hint">Klein: Symbol und Höchst-/Mindesttemperatur. Mittel: zusätzlich die Beschreibung. Groß: zusätzlich der Tagesverlauf (Morgen/Mittag/Abend).</div>
             </div>
 
             <div class="slider-row">
-              <span class="slider-label">Größe</span>
+              <span class="slider-label">Größe (bei Medien)</span>
               <input type="range" class="slider" id="weather_size_pct" name="weather_size_pct" min="30" max="600" step="5" value="{{ settings.weather_size_pct }}">
               <span class="slider-value" id="weather_size_pct_val">{{ settings.weather_size_pct }}%</span>
+            </div>
+
+            <div class="slider-row">
+              <span class="slider-label">Größe große Ansicht</span>
+              <input type="range" class="slider" id="weather_big_size_pct" name="weather_big_size_pct" min="30" max="600" step="5" value="{{ settings.weather_big_size_pct }}">
+              <span class="slider-value" id="weather_big_size_pct_val">{{ settings.weather_big_size_pct }}%</span>
+            </div>
+            <div class="hint">
+              Ohne Medien wird das Wetter groß mittig angezeigt (Größe große
+              Ansicht); bei Medien gilt „Größe (bei Medien)“ für das Widget.
             </div>
 
             <div class="segmented" id="weather_mode_seg">
@@ -152,9 +173,10 @@
       <div class="card" id="weather-data-card">
         <h2>Wetter bearbeiten</h2>
         <p class="hint">
-          Für jeden Tag Wetterzustand und Temperatur wählen – die passenden
-          Symbole werden automatisch angezeigt. Die Werte werden automatisch
-          aktualisiert; ohne Internetverbindung hier manuell pflegen.
+          Für jeden Tag Wetterzustand sowie Höchst- und Mindesttemperatur
+          wählen – die passenden Symbole werden automatisch angezeigt. Die
+          Werte werden automatisch aktualisiert; ohne Internetverbindung
+          hier manuell pflegen.
         </p>
         <div class="row-btns">
           <button type="button" class="btn" id="weather-refresh-btn">Jetzt aktualisieren</button>
@@ -179,8 +201,12 @@
                 </select>
               </label>
               <div class="temp-field">
-                <label for="weather_today_temp">Temperatur (°C)</label>
-                <input type="text" id="weather_today_temp" maxlength="16" placeholder="z. B. 23">
+                <label for="weather_today_temp_max">Höchsttemperatur (°C)</label>
+                <input type="text" id="weather_today_temp_max" maxlength="16" placeholder="z. B. 24">
+              </div>
+              <div class="temp-field">
+                <label for="weather_today_temp_min">Mindesttemperatur (°C)</label>
+                <input type="text" id="weather_today_temp_min" maxlength="16" placeholder="z. B. 16">
               </div>
             </div>
 
@@ -200,8 +226,12 @@
                 </select>
               </label>
               <div class="temp-field">
-                <label for="weather_tomorrow_temp">Temperatur (°C)</label>
-                <input type="text" id="weather_tomorrow_temp" maxlength="16" placeholder="z. B. 19">
+                <label for="weather_tomorrow_temp_max">Höchsttemperatur (°C)</label>
+                <input type="text" id="weather_tomorrow_temp_max" maxlength="16" placeholder="z. B. 19">
+              </div>
+              <div class="temp-field">
+                <label for="weather_tomorrow_temp_min">Mindesttemperatur (°C)</label>
+                <input type="text" id="weather_tomorrow_temp_min" maxlength="16" placeholder="z. B. 12">
               </div>
             </div>
           </div>

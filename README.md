@@ -40,16 +40,22 @@ Wiedergabe und Benutzer über ein dunkles, modernes Dashboard.
 - Videos (MP4, WebM) starten **automatisch** und spielen nacheinander
 - Hintergrundmusik (MP3, WAV, OGG) dauerhaft im Hintergrund
 - **Uhr + Datum**, die sich jede Sekunde aktualisiert:
-  - **Größe** frei skalierbar über Schieberegler (30–600 %)
+  - **zwei getrennte Größen** über Schieberegler (30–600 %):
+    „Größe (bei Medien)“ für das kleine Widget unten rechts und
+    „Größe große Ansicht“ für die große Uhr mittig ohne Medien
   - **Position** automatisch (ohne Medien mittig, mit Medien unten rechts)
     oder **frei wählbar** über **Drag & Drop** in der Live-Vorschau
   - **Zwischenansicht** (Interstitial): Uhr-Ansicht zwischen den Medien
   - ohne Medien: große Uhr mittig über den gesamten Bildschirm
-- **Wetter-Widget** (optional): Ort, Temperatur und Zustand für heute und
-  morgen – automatisch über Open-Meteo (kostenlos, ohne API-Schlüssel)
-  oder manuell gepflegt; **zwei Darstellungen** (klein: Symbol + Temperatur,
-  groß: Überschrift, großes Symbol, Beschreibung), Größe und Position wie
-  bei der Uhr frei einstellbar
+- **Wetter-Widget** (optional): Ort, Wetterzustand, Höchst- und
+  Mindesttemperatur für heute und morgen – automatisch über Open-Meteo
+  (kostenlos, ohne API-Schlüssel) oder manuell gepflegt; **drei
+  Darstellungen** (klein: Symbol + Höchst-/Mindesttemperatur, mittel:
+  zusätzlich Beschreibung, groß: zusätzlich Tagesverlauf
+  Morgen/Mittag/Abend), Position wie bei der Uhr frei einstellbar und
+  **zwei getrennte Größen**: „Größe (bei Medien)“ für das Widget sowie
+  „Größe große Ansicht“ – ohne Medien wird das Wetter **wie die Uhr**
+  groß mittig über den Bildschirm angezeigt
 - **Explizites Speichern**: Alle Wiedergabe-Änderungen (Diashow, Uhr, Wetter,
   Positionen, Größen, Anzeigedauer) werden erst über den gut sichtbaren
   Button **„Einstellungen speichern“** übernommen und dann per SSE sofort an
@@ -86,14 +92,16 @@ Wiedergabe und Benutzer über ein dunkles, modernes Dashboard.
   (Drag & Drop + Pfeiltasten), Vorschau, **Ein/Aus-Schalter pro Datei**
 - **Wiedergabe-Einstellungen:** Anzeigedauer, Übergang, Autoplay, Loop,
   Lautstärke, Hintergrundmusik, **Widgets** (Uhr und Wetter: aktiv,
-  Größe per Schieberegler bis 600 %, Position automatisch oder per
+  **zwei getrennte Größen** per Schieberegler bis 600 % – klein bei Medien,
+  groß ohne Medien – Position automatisch oder per
   **Drag & Drop** in der Vorschau) – mit **Live-Vorschau**, die exakt wie
   die Anzeige rendert (gleiche Symbole, Übersetzungen, Zustände) und
   **dieselben Echtzeitdaten** nutzt (SSE-Stream): Das aktuell laufende
   Medium der Anzeige erscheint live in der Vorschau. Übernommen wird
   alles erst mit dem Button **„Einstellungen speichern“**
 - **Wetterdaten:** automatisch abrufen (Open-Meteo) oder **manuell pflegen**
-  (Wetterzustand + Temperatur pro Tag, Symbol wird automatisch angezeigt)
+  (Wetterzustand + Höchst-/Mindesttemperatur pro Tag, Symbol wird
+  automatisch angezeigt)
 - **Benutzerverwaltung:** Benutzer anlegen/löschen, Passwort ändern,
   Rollen vergeben, Benutzer deaktivieren
 
@@ -487,8 +495,8 @@ folgt hinzu:
 Das **Wetter-Widget** ist bereits als vollständiges Beispiel umgesetzt:
 Modell (`WeatherData` in `backend/models.py`), Dienst
 (`backend/services/weather.py`), Routen (`backend/routes/weather.py`) und
-Frontend (Widget in `display.js`/`display.css` + Verwaltung in der
-Wiedergabe-Seite).
+Frontend (Widget in der gemeinsamen Render-Engine `widgets.js`/`widgets.css`
++ Verwaltung in der Wiedergabe-Seite).
 
 Die Datenbankmodelle sind in `backend/models.py` zentral und werden beim
 Start automatisch angelegt (`db.create_all()`). Für Schema-Änderungen in

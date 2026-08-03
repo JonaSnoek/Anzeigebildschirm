@@ -107,15 +107,17 @@
   --widget-scale: 1;
   position: fixed;
   z-index: 11;
-  background: rgba(10, 14, 22, .5);
+  background: rgba(10, 14, 22, .55);
   border: 1px solid rgba(255, 255, 255, .16);
-  border-radius: 1em;
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  box-shadow: 0 8px 30px rgba(0, 0, 0, .35);
+  border-radius: 1.1em;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow: 0 10px 34px rgba(0, 0, 0, .4);
   color: #fff;
   pointer-events: none;
   font-variant-numeric: tabular-nums;
+  padding: .8em 1em;
+  min-width: 11em;
 }
 
 .widget-weather.embedded {
@@ -127,12 +129,7 @@
 
 .widget-weather.embedded:active { cursor: grabbing; }
 
-.widget-weather svg {
-  width: 1.5em;
-  height: 1.5em;
-  flex-shrink: 0;
-  opacity: .95;
-}
+.widget-weather svg { flex-shrink: 0; opacity: .95; }
 
 .widget-weather .weather-location {
   font-size: .8em;
@@ -141,7 +138,6 @@
   opacity: .75;
   border-bottom: 1px solid rgba(255, 255, 255, .12);
   padding-bottom: .3em;
-  margin-bottom: .2em;
 }
 
 /* Automatische Position: oben rechts (Standard) */
@@ -157,80 +153,157 @@
   text-align: center;
 }
 
-/* --- Kleine Ansicht: Symbol + Temperatur + Tag je Zeile --- */
-.widget-weather.weather-small {
-  font-size: calc(.95rem * var(--widget-scale));
-  padding: .6em .8em;
+.weather-blocks {
   display: flex;
   flex-direction: column;
-  gap: .45em;
+  gap: .5em;
 }
 
-.widget-weather.weather-small .weather-block {
+.weather-days {
+  display: flex;
+  gap: .55em;
+}
+
+/* Tageskarte: Symbol + Tag, Beschreibung, Höchst-/Mindesttemperatur */
+.weather-card {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: .2em;
+  background: rgba(255, 255, 255, .06);
+  border: 1px solid rgba(255, 255, 255, .1);
+  border-radius: .85em;
+  padding: .55em .7em;
+}
+
+.weather-head {
   display: flex;
   align-items: center;
-  gap: .7em;
+  gap: .4em;
 }
 
-.widget-weather.weather-small .weather-icon { display: inline-flex; }
+.weather-head .weather-day-ico svg {
+  width: 1.7em;
+  height: 1.7em;
+}
 
-.widget-weather.weather-small .weather-temp {
-  font-size: 1.15em;
+.weather-day-label {
   font-weight: 700;
+  letter-spacing: .04em;
 }
 
-.widget-weather.weather-small .weather-day {
-  margin-left: auto;
+.weather-desc {
+  font-size: .82em;
   opacity: .85;
-  font-size: .85em;
+  line-height: 1.2;
 }
 
-.widget-weather.weather-small .weather-desc,
-.widget-weather.weather-small .weather-head { display: none; }
-
-/* --- Große Ansicht: Überschrift, großes Symbol, große Temperatur, Beschreibung --- */
-.widget-weather.weather-large {
-  font-size: calc(1.15rem * var(--widget-scale));
-  padding: .9em 1.1em;
-  min-width: 12em;
+.weather-temps {
   display: flex;
-  flex-direction: column;
-  gap: .6em;
+  align-items: baseline;
+  gap: .8em;
+  margin-top: .1em;
 }
 
-.widget-weather.weather-large .weather-head {
-  font-size: .8em;
-  letter-spacing: .08em;
-  text-transform: uppercase;
-  opacity: .8;
-  border-bottom: 1px solid rgba(255, 255, 255, .15);
-  padding-bottom: .25em;
-}
-
-.widget-weather.weather-large .weather-block { display: flex; flex-direction: column; gap: .15em; }
-
-.widget-weather.weather-large .weather-body {
-  display: flex;
-  align-items: center;
-  gap: .7em;
-}
-
-.widget-weather.weather-large .weather-icon svg {
-  width: 2.6em;
-  height: 2.6em;
-}
-
-.widget-weather.weather-large .weather-info {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-}
-
-.widget-weather.weather-large .weather-temp {
-  font-size: 2em;
+.weather-temp {
+  display: inline-flex;
+  align-items: baseline;
+  gap: .2em;
   font-weight: 700;
   line-height: 1;
 }
 
-.widget-weather.weather-large .weather-desc { opacity: .85; font-size: .95em; }
-.widget-weather.weather-large .weather-day { display: none; }
+/* Höchsttemperatur warm, Mindesttemperatur kühl – auch aus der Ferne
+   klar unterscheidbar. */
+.weather-temp-max { font-size: 1.5em; color: #ffd166; }
+.weather-temp-min { font-size: 1.15em; font-weight: 600; color: #9ad0f5; }
+
+.temp-arrow { font-size: .62em; opacity: .8; }
+
+.weather-unit { font-size: .68em; font-weight: 400; opacity: .85; }
+
+/* Tagesverlauf (Morgen/Mittag/Abend) – nur in der großen Darstellung */
+.weather-courses {
+  display: flex;
+  flex-direction: column;
+  gap: .35em;
+}
+
+.weather-course {
+  display: flex;
+  align-items: center;
+  gap: .5em;
+}
+
+.weather-course-day {
+  font-size: .72em;
+  font-weight: 600;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  opacity: .7;
+  min-width: 3.4em;
+  text-align: left;
+}
+
+.weather-course-slots {
+  display: flex;
+  gap: .35em;
+  flex: 1;
+}
+
+.weather-period {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: .12em;
+  background: rgba(255, 255, 255, .05);
+  border-radius: .7em;
+  padding: .35em .3em;
+}
+
+.weather-period-ico svg { width: 1.5em; height: 1.5em; }
+
+.weather-period-temp { font-weight: 700; font-size: 1em; line-height: 1; }
+
+.weather-period-label { font-size: .68em; opacity: .75; }
+
+/* --- Klein: Symbol + Tag + Höchst-/Mindesttemperatur --- */
+.widget-weather.weather-small {
+  font-size: calc(.85rem * var(--widget-scale));
+}
+
+.widget-weather.weather-small .weather-desc { display: none; }
+
+.widget-weather.weather-small .weather-card { padding: .4em .6em; gap: .05em; }
+
+.widget-weather.weather-small .weather-head .weather-day-ico svg {
+  width: 1.4em;
+  height: 1.4em;
+}
+
+.widget-weather.weather-small .weather-temp-max { font-size: 1.25em; }
+.widget-weather.weather-small .weather-temp-min { font-size: 1em; }
+
+/* --- Mittel: zusätzlich die Beschreibung --- */
+.widget-weather.weather-medium {
+  font-size: calc(.95rem * var(--widget-scale));
+}
+
+/* --- Groß: zusätzlich der Tagesverlauf --- */
+.widget-weather.weather-large {
+  font-size: calc(1.1rem * var(--widget-scale));
+}
+
+/* --- Große Wetter-Ansicht (Leerzustand / Interstitial) ---
+   Analog zur großen Uhr: bildschirmfüllend, mittig, unten zentriert,
+   skaliert über --widget-scale (weather_big_size_pct). */
+.widget-weather.weather-screen {
+  left: 50%;
+  bottom: 8%;
+  transform: translateX(-50%);
+  text-align: center;
+  font-size: calc(clamp(2 * var(--screen-h) / 100, 4 * var(--screen-h) / 100, 5 * var(--screen-h) / 100) * var(--widget-scale));
+}

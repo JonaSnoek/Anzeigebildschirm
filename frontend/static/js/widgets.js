@@ -51,6 +51,9 @@ window.Signage = (function () {
     de: {
       today: "Heute",
       tomorrow: "Morgen",
+      morning: "Morgen",
+      noon: "Mittag",
+      evening: "Abend",
       "no-data": "Keine Daten",
       sun: "Sonnig",
       "cloud-sun": "Leicht bewölkt",
@@ -64,6 +67,9 @@ window.Signage = (function () {
     en: {
       today: "Today",
       tomorrow: "Tomorrow",
+      morning: "Morning",
+      noon: "Noon",
+      evening: "Evening",
       "no-data": "No data",
       sun: "Sunny",
       "cloud-sun": "Partly Cloudy",
@@ -104,37 +110,68 @@ window.Signage = (function () {
 
   /*
    * Wetter-Widget als HTML. `data` = { location, today, tomorrow } mit
-   * je { state, icon, temp, desc }. `display` = "small" | "large".
-   * Die Übersetzung ("Heute"/"Morgen", Zustände) erfolgt über `lang`.
+   * je { state, icon, temp, temp_max, temp_min, desc, course }. `display`
+   * = "small" | "medium" | "large". Die Übersetzung ("Heute"/"Morgen",
+   * Zustände, Tageszeiträume) erfolgt über `lang`.
+   *
+   * - Klein:  Symbol + Tag + Höchst-/Mindesttemperatur
+   * - Mittel: zusätzlich die Beschreibung
+   * - Groß:   zusätzlich der Tagesverlauf (Morgen/Mittag/Abend) je Tag
    */
   function weatherMarkup(data, display, lang) {
     const d = data || {};
-    const size = display === "small" ? "small" : "large";
+    const size = ["small", "medium", "large"].indexOf(display) >= 0 ? display : "large";
     const icon = (key) => WEATHER_ICONS[key] || WEATHER_ICONS.cloud;
+    const show = (v) => {
+      const raw = v === "" || v === null || v === undefined ? "--" : String(v);
+      if (raw === "--") return "--";
+      return `${esc(raw)}<span class="weather-unit">°</span>`;
+    };
+    const dayLabel = (key) => (key === "today" ? t(lang, "today") : t(lang, "tomorrow"));
 
-    const block = (label, section) => {
+    const card = (label, section) => {
       const s = section || {};
       const state = s.state || s.icon || "cloud";
-      const head = label === "today" ? t(lang, "today") : t(lang, "tomorrow");
-      const desc = weatherText(lang, state, s.desc);
-      const temp = s.temp ? esc(s.temp) : "--";
+      const max = s.temp_max || s.temp || "";
+      const min = s.temp_min || s.temp || "";
       return `
-      <div class="weather-block weather-${label}">
-        ${size === "large" ? `<div class="weather-head">${head}</div>` : ""}
-        <div class="weather-body">
-          <span class="weather-icon">${icon(state)}</span>
-          <div class="weather-info">
-            <span class="weather-temp">${temp}°</span>
-            ${size === "large" ? `<span class="weather-desc">${esc(desc)}</span>` : ""}
-          </div>
-          ${size === "small" ? `<span class="weather-day">${head}</span>` : ""}
+      <div class="weather-card weather-${label}">
+        <div class="weather-head">
+          <span class="weather-day-ico">${icon(state)}</span>
+          <span class="weather-day-label">${esc(dayLabel(label))}</span>
+        </div>
+        <span class="weather-desc">${esc(weatherText(lang, state, s.desc))}</span>
+        <div class="weather-temps">
+          <span class="weather-temp weather-temp-max"><span class="temp-arrow">&#8593;</span>${show(max)}</span>
+          <span class="weather-temp weather-temp-min"><span class="temp-arrow">&#8595;</span>${show(min)}</span>
         </div>
       </div>`;
     };
 
-    return (d.location ? `<div class="weather-location">${esc(d.location)}</div>` : "") +
-      block("today", d.today) +
-      block("tomorrow", d.tomorrow);
+    const course = (label, section) => {
+      const items = ((section && section.course) || []).map((p) => `
+        <div class="weather-period">
+          <span class="weather-period-ico">${icon(p.state || p.icon || "cloud")}</span>
+          <span class="weather-period-temp">${show(p.temp)}</span>
+          <span class="weather-period-label">${esc(t(lang, p.period))}</span>
+        </div>`).join("");
+      if (!items) return "";
+      return `
+      <div class="weather-course" data-day="${label}">
+        <span class="weather-course-day">${esc(dayLabel(label))}</span>
+        <span class="weather-course-slots">${items}</span>
+      </div>`;
+    };
+
+    return `
+      <div class="weather-blocks">
+        ${d.location ? `<div class="weather-location">${esc(d.location)}</div>` : ""}
+        <div class="weather-days">
+          ${card("today", d.today)}
+          ${card("tomorrow", d.tomorrow)}
+        </div>
+        ${size === "large" ? `<div class="weather-courses">${course("today", d.today)}${course("tomorrow", d.tomorrow)}</div>` : ""}
+      </div>`;
   }
 
   return {
