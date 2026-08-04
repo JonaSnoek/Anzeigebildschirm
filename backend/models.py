@@ -236,3 +236,30 @@ class LocationWeather(db.Model):
             return value if isinstance(value, list) else []
         except (TypeError, ValueError):
             return []
+
+
+class AnnouncementTemplate(db.Model):
+    """
+    Gespeicherte Design-Vorlagen für den Ankündigungsbild-Editor.
+
+    Eine Vorlage ist ein Projekt-JSON-Fragment (Hintergrund, Overlay,
+    Raster und Elemente) – also genau der gestalterische Teil eines
+    Ankündigungsbildes. Der Administrator kann das aktuelle Design unter
+    einem Namen speichern und beim Erstellen eines neuen Ankündigungsbildes
+    wieder als Vorlage auswählen.
+    """
+
+    __tablename__ = "announcement_templates"
+
+    id = db.Column(Integer, primary_key=True)
+    name = db.Column(String(200), nullable=False)
+    project_json = db.Column(Text, nullable=False, default="")
+    created_at = db.Column(DateTime, nullable=False, default=_utcnow)
+
+    def to_dict(self) -> dict:
+        """Serielles Format für die API (ohne den Projekt-JSON selbst)."""
+        return {
+            "id": self.id,
+            "name": self.name,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }

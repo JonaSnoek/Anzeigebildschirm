@@ -22,6 +22,7 @@ from ..models import Media
 
 MAX_BG_SIZE = 20 * 1024 * 1024  # 20 MB, wie bei Bild-Uploads
 _ALLOWED_BG_EXTS = (".jpg", ".jpeg", ".png", ".gif", ".webp")
+_ALLOWED_ELEMENT_EXTS = (".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg")
 
 
 def announcements_dir() -> Path:
@@ -107,9 +108,56 @@ def delete_background(stored_name: str | None) -> None:
                 continue
 
 
+def store_element_image(file_storage) -> tuple[str | None, str | None]:
+    """
+    Speichert ein Bild, das im Editor als Element verwendet wird (Logo,
+    Veranstaltungsbild, kleines Symbol). Liefert (Dateiname, Fehler).
+    """
+    if file_storage is None or not file_storage.filename:
+        return None, "Keine Bilddatei übermittelt."
+    ext = Path(file_storage.filename or "").suffix.lower()
+    if ext not in _ALLOWED_ELEMENT_EXTS:
+        return None, "Ungültiges Bildformat."
+    folder = announcements_dir()
+    stored_name = f"el_{uuid.uuid4().hex}{ext}"
+    destination = folder / stored_name
+    size = 0
+    too_large = False
+    with open(destination, "wb") as out:
+        while True:
+            chunk = file_storage.stream.read(1024 * 1024)
+            if not chunk:
+                break
+            size += len(chunk)
+            if size > MAX_BG_SIZE:
+                too_large = True
+                break
+            out.write(chunk)
+    if too_large:
+        destination.unlink(missing_ok=True)
+        return None, "Das Bild ist zu groß."
+    return stored_name, None
+
+
+def element_image_files(project: dict) -> list[str]:
+    """Alle Dateinamen, die Elemente eines Projekts als Bild referenzieren."""
+    files = []
+    for element in project.get("elements") or []:
+        if element.get("type") in ("image", "logo") and element.get("file"):
+            files.append(element["file"])
+    return files
+
+
+def delete_element_images(project: dict) -> None:
+    """Entfernt alle von Elementen referenzierten Bilddateien."""
+    for name in element_image_files(project):
+        delete_background(name)
+
+
 def delete_project(media: Media) -> None:
-    """Entfernt Projektdatei und Hintergrundbild eines Ankündigungsbildes."""
+    """Entfernt Projektdatei, Hintergrundbild und Element-Bilder."""
     project = load_project(media) or {}
+    delete_element_images(project)
     background = project.get("background") or {}
     delete_background(background.get("file"))
     if media.project_file:
@@ -139,6 +187,19 @@ def duplicate_announcement(source: Media) -> Media:
             shutil.copy2(src_bg, announcements_dir() / new_bg)
     if new_bg:
         project.setdefault("background", {})["file"] = new_bg
+
+    # Element-Bilder kopieren (eigene Dateien für die Kopie), damit das
+    # Löschen der Kopie die vom Original referenzierten Bilder nicht entfernt.
+    new_el = {}
+    for name in element_image_files(project):
+        src_el = announcements_dir() / Path(name).name
+        if src_el.exists():
+            new_el[name] = f"el_{uuid.uuid4().hex}{Path(name).suffix}"
+            shutil.copy2(src_el, announcements_dir() / new_el[name])
+    if new_el:
+        for element in project.get("elements") or []:
+            if element.get("file") in new_el:
+                element["file"] = new_el[element["file"]]
 
     new_project_file = f"{uuid.uuid4().hex}.json"
     copy = Media(

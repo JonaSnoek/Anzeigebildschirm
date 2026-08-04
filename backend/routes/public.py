@@ -177,6 +177,7 @@ def media_file(media_type: str, filename: str):
     )
     # Verhindert MIME-Sniffing und damit Ausführung als HTML
     response.headers["X-Content-Type-Options"] = "nosniff"
-    # Keine veralteten Inhalte: Browser prüft immer neu (Last-Modified/ETag)
-    response.headers["Cache-Control"] = "no-cache"
+    # Keine veralteten Inhalte: Browser hält Medien nie im Cache, außerdem
+    # ändert sich der Dateiname bei jedem Austausch (neue Dateiversion).
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
     return response

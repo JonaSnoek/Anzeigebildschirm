@@ -20,7 +20,7 @@ from sqlalchemy import func, select
 from ..config import BASE_DIR, Config
 from ..database import db
 from ..events import notify_display
-from ..models import Media
+from ..models import AnnouncementTemplate, Media
 from ..security import roles_required
 from ..services.announcements import (
     delete_background,
@@ -28,6 +28,7 @@ from ..services.announcements import (
     load_project,
     save_project,
     store_background,
+    store_element_image,
 )
 
 bp = Blueprint("announcements", __name__)
@@ -143,14 +144,85 @@ def editor_edit(media_id):
 @bp.get("/api/announcements/bg/<path:filename>")
 @roles_required("admin", "editor")
 def background_file(filename):
-    """Liefert ein Hintergrundbild des Editors an den Admin-Bereich."""
+    """Liefert ein Hintergrund-/Element-Bild des Editors an den Admin-Bereich."""
     folder = Config.ANNOUNCEMENT_DIR
     if not folder.exists():
         abort(404)
     response = send_from_directory(str(folder), Path(filename).name, max_age=0)
     response.headers["X-Content-Type-Options"] = "nosniff"
-    response.headers["Cache-Control"] = "no-cache"
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
     return response
+
+
+@bp.post("/api/announcements/elements")
+@roles_required("admin", "editor")
+def upload_element_image():
+    """Lädt ein Bild hoch, das als Element im Editor eingefügt wird."""
+    file = request.files.get("file")
+    name, error = store_element_image(file)
+    if error:
+        return jsonify({"error": error}), 400
+    return jsonify({"ok": True, "file": name, "url": f"/api/announcements/bg/{name}"})
+
+
+# ---------------------------------------------------------------------------
+# Design-Vorlagen
+# ---------------------------------------------------------------------------
+
+@bp.get("/api/announcement-templates")
+@roles_required("admin", "editor")
+def list_templates():
+    """Alle gespeicherten Design-Vorlagen des Administrators."""
+    rows = db.session.execute(
+        select(AnnouncementTemplate).order_by(AnnouncementTemplate.created_at.desc())
+    ).scalars().all()
+    return jsonify({"templates": [t.to_dict() for t in rows]})
+
+
+@bp.post("/api/announcement-templates")
+@roles_required("admin", "editor")
+def create_template():
+    """Speichert das aktuelle Design als benannte Vorlage."""
+    data = request.get_json(silent=True) or {}
+    name = (data.get("name") or "").strip()[:200]
+    project = data.get("project")
+    if not name:
+        return jsonify({"error": "Bitte einen Namen für die Vorlage angeben."}), 400
+    if not isinstance(project, dict):
+        return jsonify({"error": "Ungültige Vorlagendaten."}), 400
+    template = AnnouncementTemplate(
+        name=name,
+        project_json=json.dumps(project, ensure_ascii=False),
+    )
+    db.session.add(template)
+    db.session.commit()
+    return jsonify({"ok": True, "item": template.to_dict()}), 201
+
+
+@bp.delete("/api/announcement-templates/<int:template_id>")
+@roles_required("admin")
+def delete_template(template_id):
+    """Löscht eine gespeicherte Design-Vorlage."""
+    template = db.session.get(AnnouncementTemplate, template_id)
+    if template is None:
+        return jsonify({"error": "Vorlage nicht gefunden."}), 404
+    db.session.delete(template)
+    db.session.commit()
+    return jsonify({"ok": True})
+
+
+@bp.get("/api/announcement-templates/<int:template_id>")
+@roles_required("admin", "editor")
+def get_template(template_id):
+    """Liefert das Projekt-JSON einer Design-Vorlage."""
+    template = db.session.get(AnnouncementTemplate, template_id)
+    if template is None:
+        return jsonify({"error": "Vorlage nicht gefunden."}), 404
+    try:
+        project = json.loads(template.project_json or "{}")
+    except ValueError:
+        return jsonify({"error": "Vorlage ist beschädigt."}), 500
+    return jsonify({"ok": True, "project": project})
 
 
 def _counts() -> dict:
