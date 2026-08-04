@@ -59,14 +59,11 @@ def _timeline_slots(items, settings: dict):
     """
     slide = int(settings.get("slide_duration", "8") or 8)
     loop = settings.get("loop", "true") != "false"
-    clock_on = (
-        settings.get("clock_interstitial", "false") == "true"
-        and settings.get("clock_enabled", "true") != "false"
-    )
-    weather_on = (
-        settings.get("weather_interstitial", "false") == "true"
-        and settings.get("weather_enabled", "true") != "false"
-    )
+    # Zwischenansichten sind unabhängig vom Widget-Schalter: Die große Ansicht
+    # wird eingeblendet, sobald das Interstitial aktiv ist – auch wenn das
+    # kleine Widget während der Medien ausgeschaltet ist.
+    clock_on = settings.get("clock_interstitial", "false") == "true"
+    weather_on = settings.get("weather_interstitial", "false") == "true"
 
     def interstitial_slots():
         """Uhr- und Wetter-Zwischenansicht – einzeln, nie zusammen groß."""
@@ -119,9 +116,7 @@ def _signature(items, settings: dict) -> str:
         str(settings.get("slide_duration", "8")),
         str(settings.get("loop", "true")),
         str(settings.get("clock_interstitial", "false")),
-        str(settings.get("clock_enabled", "true")),
         str(settings.get("weather_interstitial", "false")),
-        str(settings.get("weather_enabled", "true")),
     ])
 
 

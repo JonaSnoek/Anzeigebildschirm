@@ -92,6 +92,11 @@
               <input type="checkbox" id="clock_interstitial" name="clock_interstitial" {{ 'checked' if settings.clock_interstitial == 'true' }}>
               <label for="clock_interstitial">Uhr-Ansicht zwischen den Medien zeigen</label>
             </div>
+            <div class="hint">
+              Erscheint als eigener Zeitpunkt zwischen den Medien – auch wenn das
+              Uhr-Widget ausgeschaltet ist. Das kleine Uhr-Widget während der
+              Medien wird weiterhin über den Schalter oben gesteuert.
+            </div>
 
             <!-- Position wird nur per Drag &amp; Drop in der Vorschau gesetzt -->
             <input type="hidden" id="clock_x" name="clock_x" value="{{ settings.clock_x }}">
@@ -149,9 +154,9 @@
               <label for="weather_interstitial">Große Wetter-Ansicht zwischen den Medien zeigen</label>
             </div>
             <div class="hint">
-              Wird als eigener Zeitpunkt zwischen den Medien eingeblendet –
-              immer einzeln, nie zusammen mit der großen Uhr. Bei Medien gilt
-              „Größe (bei Medien)“ für das Wetter-Widget.
+              Erscheint als eigener Zeitpunkt zwischen den Medien – auch wenn das
+              Wetter-Widget ausgeschaltet ist. Das kleine Wetter-Widget während
+              der Medien wird weiterhin über den Schalter oben gesteuert.
             </div>
 
             <div class="segmented" id="weather_mode_seg">

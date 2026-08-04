@@ -60,6 +60,11 @@ Wiedergabe und Benutzer über ein dunkles, modernes Dashboard.
   eingeblendet – **immer einzeln, nie gleichzeitig** (zeigt die Uhr groß,
   bleibt das Wetter ausgeblendet und umgekehrt); bei den Medien bleiben
   beide als kleine Widgets sichtbar
+- **Zwischenansichten unabhängig vom Widget-Schalter**: Eine Zwischenansicht
+  erscheint auch dann, wenn das jeweilige Widget (Uhr/Wetter) ausgeschaltet
+  ist – die großen Ansichten werden allein über „… zwischen den Medien
+  zeigen“ gesteuert, der Widget-Schalter reguliert nur das kleine Overlay
+  während der Medien
 - **Explizites Speichern**: Alle Wiedergabe-Änderungen (Diashow, Uhr, Wetter,
   Positionen, Größen, Anzeigedauer) werden erst über den gut sichtbaren
   Button **„Einstellungen speichern“** übernommen und dann per SSE sofort an

@@ -101,9 +101,12 @@
     const c = cfg();
 
     // Große Uhr-Ansicht nur im Leerzustand (eigener Slot – getrennt vom Wetter).
+    // Die Zwischenansicht ist unabhängig vom Widget-Schalter: sie erscheint,
+    // sobald das Interstitial aktiv ist. Nur wenn Uhr-Widget UND Interstitial
+    // aus sind, bleibt der Bildschirm leer („no-clock“).
     const bigClock = currentKey === "idle";
     CLOCK_SCREEN.classList.toggle("hidden", !bigClock);
-    CLOCK_SCREEN.classList.toggle("no-clock", !c.clockEnabled);
+    CLOCK_SCREEN.classList.toggle("no-clock", !(c.clockEnabled || c.interstitial));
     if (bigClock) {
       CLOCK_BLOCK.style.setProperty("--widget-scale", c.clockBigSizePct);
       if (c.clockMode === "custom") {
@@ -165,7 +168,14 @@
       return;
     }
 
-    if (!c.weatherEnabled || !state.weather || !state.weather.location) {
+    // Das kleine Widget hängt am Widget-Schalter; die große Zwischenansicht
+    // erscheint unabhängig davon (nur echte Daten vorausgesetzt).
+    if (!bigWeather && !c.weatherEnabled) {
+      WEATHER.classList.add("hidden");
+      WEATHER.innerHTML = "";
+      return;
+    }
+    if (!state.weather || !state.weather.location) {
       WEATHER.classList.add("hidden");
       WEATHER.innerHTML = "";
       return;

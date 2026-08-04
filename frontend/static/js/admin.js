@@ -405,6 +405,7 @@ if (settingsForm) {
     const f = settingsForm;
     return {
       enabled: f[name + "_enabled"].checked,
+      interstitial: f[name + "_interstitial"].checked,
       mode: f[name + "_mode"].value,
       x: parseInt(f[name + "_x"].value, 10),
       y: parseInt(f[name + "_y"].value, 10),
@@ -460,8 +461,10 @@ if (settingsForm) {
     const idle = mode === "empty";
 
     // Große Uhr-Ansicht nur im Zustand "empty" (Uhr-Slot) – getrennt vom Wetter.
+    // Unabhängig vom Widget-Schalter: sie erscheint, sobald das Interstitial
+    // aktiv ist. Nur wenn Widget UND Interstitial aus sind, bleibt sie leer.
     previewClockScreen.classList.toggle("hidden", !idle);
-    previewClockScreen.classList.toggle("no-clock", !clock.enabled);
+    previewClockScreen.classList.toggle("no-clock", !(clock.enabled || clock.interstitial));
     if (idle) {
       previewClockBlock.style.setProperty("--widget-scale", clock.bigSizePct / 100);
       previewClockBlock.classList.toggle("clock-custom", clock.mode === "custom");
@@ -496,7 +499,7 @@ if (settingsForm) {
       previewWeather.className = "widget-weather embedded weather-screen";
       previewWeather.style.left = "";
       previewWeather.style.top = "";
-      previewWeather.classList.toggle("hidden", !weather.enabled);
+      previewWeather.classList.remove("hidden");
       previewWeather.innerHTML = Signage.weatherMarkup(weatherPreviewData(), "large", lang);
     } else if (mode === "media") {
       previewWeather.style.setProperty("--widget-scale", weather.sizePct / 100);
