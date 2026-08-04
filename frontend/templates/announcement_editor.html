@@ -16,6 +16,10 @@
       <input type="text" id="ann-name" maxlength="200" value="{{ media_name }}" placeholder="Name der Ankündigung …">
     </div>
     <div class="ae-topbar-actions">
+      <div class="ae-lang-switch" id="ae-editor-lang-switch" title="Bearbeitungssprache – für jede Sprache entsteht beim Speichern ein eigenes Bild">
+        <button type="button" data-editor-lang="de" class="active">🇩🇪 Deutsch</button>
+        <button type="button" data-editor-lang="en">🇬🇧 English</button>
+      </div>
       <button type="button" class="btn btn-small" id="ae-templates-btn">Vorlagen</button>
       <button type="button" class="btn btn-small" id="ae-save-template-btn" title="Aktuelles Design als Vorlage speichern">Design speichern</button>
       <span class="status" id="ann-save-status"></span>

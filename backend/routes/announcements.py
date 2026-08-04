@@ -23,6 +23,7 @@ from ..events import notify_display
 from ..models import AnnouncementTemplate, Media
 from ..security import roles_required
 from ..services.announcements import (
+    copy_media_to_element,
     delete_background,
     delete_project,
     load_project,
@@ -165,6 +166,17 @@ def upload_element_image():
     return jsonify({"ok": True, "file": name, "url": f"/api/announcements/bg/{name}"})
 
 
+@bp.post("/api/announcements/from-media/<int:media_id>")
+@roles_required("admin", "editor")
+def element_from_media(media_id):
+    """Übernimmt ein Bild aus der Medienbibliothek als Editor-Element."""
+    media = db.session.get(Media, media_id)
+    name, error = copy_media_to_element(media)
+    if error:
+        return jsonify({"error": error}), 400
+    return jsonify({"ok": True, "file": name, "url": f"/api/announcements/bg/{name}"})
+
+
 # ---------------------------------------------------------------------------
 # Design-Vorlagen
 # ---------------------------------------------------------------------------
@@ -282,10 +294,31 @@ def _apply_background(project: dict, bg_file) -> str | None:
     return None
 
 
+def _project_languages(project: dict) -> list:
+    """Sprachliste des Projekts (mit Standardsprache zuerst)."""
+    languages = [str(x) for x in (project.get("languages") or []) if str(x).strip()]
+    if not languages:
+        languages = ["de"]
+    default = str(project.get("defaultLanguage") or languages[0])
+    if default not in languages:
+        languages.insert(0, default)
+    return languages
+
+
+def _unlink_png(stored_name: str | None) -> None:
+    """Entfernt eine PNG-Datei unter uploads/images (falls vorhanden)."""
+    if not stored_name:
+        return
+    try:
+        (Config.UPLOAD_DIR / "images" / Path(stored_name).name).unlink(missing_ok=True)
+    except OSError:
+        pass
+
+
 @bp.post("/api/announcements")
 @roles_required("admin", "editor")
 def create():
-    """Erstellt ein neues Ankündigungsbild (multipart: file + project [+ background])."""
+    """Erstellt ein neues Ankündigungsbild (multipart: file [+ file_<lang>] + project [+ background])."""
     project, error = _parse_project(request.form.get("project"))
     if error:
         return jsonify({"error": error}), 400
@@ -297,8 +330,24 @@ def create():
 
     bg_error = _apply_background(project, request.files.get("background"))
     if bg_error:
-        (Config.UPLOAD_DIR / "images" / stored_name).unlink(missing_ok=True)
+        _unlink_png(stored_name)
         return jsonify({"error": bg_error}), 400
+
+    # Sprachvarianten (außer Standardsprache) zusätzlich ablegen
+    languages = _project_languages(project)
+    default_lang = languages[0]
+    lang_files = {}
+    for lang in languages:
+        if lang == default_lang:
+            continue
+        f = request.files.get("file_" + lang)
+        if f is not None and f.filename:
+            lang_name, error = _store_png(f)
+            if error:
+                for n in [stored_name] + list(lang_files.values()):
+                    _unlink_png(n)
+                return jsonify({"error": error}), 400
+            lang_files[lang] = lang_name
 
     project["name"] = name
     max_order = db.session.execute(
@@ -313,6 +362,7 @@ def create():
         sort_order=int(max_order) + 1,
         active=True,
         project_file=f"{uuid.uuid4().hex}.json",
+        language_files=json.dumps(lang_files) if lang_files else "",
     )
     db.session.add(media)
     db.session.commit()
@@ -337,6 +387,9 @@ def update(media_id):
     if "height" not in project:
         project["height"] = 1080
 
+    languages = _project_languages(project)
+    default_lang = languages[0]
+
     old_project = load_project(media) or {}
     old_bg = (old_project.get("background") or {}).get("file")
 
@@ -346,20 +399,44 @@ def update(media_id):
         return jsonify({"error": bg_error}), 400
     new_bg = (project.get("background") or {}).get("file")
 
-    # Neues gerendertes Bild ablegen (alte Datei entfernen)
-    stored_name, error = _store_png(request.files.get("file"))
-    if error:
-        # Neu gespeichertes Hintergrundbild zurückrollen, falls vorhanden
+    # Neue Dateien zuerst ablegen; erst nach Erfolg die alten entfernen,
+    # damit bei einem Fehler der bisherige Stand erhalten bleibt.
+    stored = []
+
+    def rollback():
+        for n in stored:
+            _unlink_png(n)
         if new_bg and new_bg != old_bg:
             delete_background(new_bg)
             project.setdefault("background", {})["file"] = old_bg
-        return jsonify({"error": error}), 400
-    old_png = Config.UPLOAD_DIR / "images" / media.stored_name
-    try:
-        old_png.unlink(missing_ok=True)
-    except OSError:
-        pass
 
+    stored_name, error = _store_png(request.files.get("file"))
+    if error:
+        rollback()
+        return jsonify({"error": error}), 400
+    stored.append(stored_name)
+
+    old_lang_files = media.language_files_dict()
+    lang_files = {}
+    for lang in languages:
+        if lang == default_lang:
+            continue
+        f = request.files.get("file_" + lang)
+        if f is not None and f.filename:
+            lang_name, error = _store_png(f)
+            if error:
+                rollback()
+                return jsonify({"error": error}), 400
+            lang_files[lang] = lang_name
+            stored.append(lang_name)
+        elif lang in old_lang_files:
+            lang_files[lang] = old_lang_files[lang]  # bestehende Variante behalten
+
+    # Erfolg: alte Dateien entfernen
+    _unlink_png(media.stored_name)
+    for lang, old_name in old_lang_files.items():
+        if lang_files.get(lang) != old_name:
+            _unlink_png(old_name)
     if old_bg and old_bg != new_bg:
         delete_background(old_bg)
 
@@ -369,6 +446,7 @@ def update(media_id):
     media.stored_name = stored_name
     media.mime_type = "image/png"
     media.size_bytes = (Config.UPLOAD_DIR / "images" / stored_name).stat().st_size
+    media.language_files = json.dumps(lang_files) if lang_files else ""
     db.session.commit()
     save_project(media, project)
     notify_display()

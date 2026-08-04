@@ -369,10 +369,70 @@
 }
 .ae-modal-foot input:focus { border-color: #2f5cff; }
 
+/* Bild-/Logo-Picker */
+.ae-picker-tabs { display: flex; gap: 6px; margin-bottom: 12px; }
+.ae-picker-tabs button {
+  flex: 1; padding: 8px 10px; font-size: 12.5px; font-weight: 600;
+  background: #121a26; border: 1px solid #232c3a; border-radius: 8px; color: #8a97ad; cursor: pointer;
+}
+.ae-picker-tabs button.active { background: #1b2a44; border-color: #2f5cff; color: #fff; }
+.ae-picker-pane.hidden { display: none; }
+.ae-media-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px;
+  max-height: 52vh; overflow-y: auto;
+}
+.ae-media-cell {
+  border: 1px solid #232c3a; border-radius: 10px; overflow: hidden; cursor: pointer;
+  background: #0d1420; transition: border-color .15s, transform .15s;
+}
+.ae-media-cell:hover { border-color: #2f5cff; transform: translateY(-2px); }
+.ae-media-cell img { width: 100%; height: 92px; object-fit: cover; display: block; background: #182332; }
+.ae-media-name {
+  display: block; padding: 6px 8px; font-size: 10.5px; color: #aab6c8;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.ae-upload-drop {
+  display: flex; align-items: center; justify-content: center; text-align: center;
+  border: 1.5px dashed #3b4a63; border-radius: 12px; padding: 34px 16px; margin-bottom: 12px;
+  color: #8a97ad; font-size: 13px; cursor: pointer; background: #0d1420;
+}
+.ae-upload-drop:hover { border-color: #2f5cff; color: #c7d1e0; }
+.ae-upload-drop input { display: none; }
+
 /* Scrollbars */
 .ae-side::-webkit-scrollbar, .ae-stage::-webkit-scrollbar, .ae-modal-body::-webkit-scrollbar { width: 10px; height: 10px; }
 .ae-side::-webkit-scrollbar-thumb, .ae-stage::-webkit-scrollbar-thumb, .ae-modal-body::-webkit-scrollbar-thumb { background: #26303f; border-radius: 5px; }
 .ae-side::-webkit-scrollbar-track, .ae-stage::-webkit-scrollbar-track, .ae-modal-body::-webkit-scrollbar-track { background: transparent; }
+
+/* Sprachumschalter (Topbar) */
+.ae-lang-switch {
+  display: inline-flex; border: 1px solid #232c3a; border-radius: 9px; overflow: hidden;
+  background: #121a26;
+}
+.ae-lang-switch button {
+  border: 0; background: transparent; color: #8a97ad; cursor: pointer;
+  font-size: 12px; font-weight: 600; padding: 7px 10px;
+  display: inline-flex; align-items: center; gap: 5px; white-space: nowrap;
+}
+.ae-lang-switch button + button { border-left: 1px solid #232c3a; }
+.ae-lang-switch button.active { background: #1b2a44; color: #7fb2ff; }
+
+/* Sprach-Tabs im Inspector */
+.ae-lang-tabs { display: flex; border: 1px solid #232c3a; border-radius: 8px; overflow: hidden; margin-bottom: 8px; }
+.ae-lang-tabs button {
+  flex: 1; padding: 6px 4px; background: #121a26; border: 0; color: #8a97ad;
+  cursor: pointer; font-size: 11.5px; font-weight: 700;
+  display: inline-flex; align-items: center; justify-content: center; gap: 5px;
+}
+.ae-lang-tabs button + button { border-left: 1px solid #232c3a; }
+.ae-lang-tabs button.active { background: #1b2a44; color: #7fb2ff; }
+
+/* Fehlende Übersetzung deutlich kennzeichnen */
+.ae-missing-badge {
+  font-size: 11.5px; color: #fbbf24; background: rgba(251, 191, 36, .12);
+  border: 1px solid rgba(251, 191, 36, .45); border-radius: 8px;
+  padding: 6px 9px; margin-bottom: 8px; line-height: 1.4;
+}
 
 /* Kleine Bildschirme: Panels stufenweise schmaler */
 @media (max-width: 1200px) {

@@ -156,9 +156,13 @@ def replace_file(media: Media, file_storage) -> tuple[Media | None, str | None]:
 
 
 def delete_media_file(media: Media) -> None:
-    """Entfernt die physische Datei (falls vorhanden)."""
-    file_path = _upload_folder(media.type) / media.stored_name
-    try:
-        file_path.unlink(missing_ok=True)
-    except OSError:
-        pass
+    """Entfernt die physische Datei und alle Sprachvarianten (falls vorhanden)."""
+    names = [media.stored_name] + list((media.language_files_dict() or {}).values())
+    for name in names:
+        if not name:
+            continue
+        file_path = _upload_folder(media.type) / name
+        try:
+            file_path.unlink(missing_ok=True)
+        except OSError:
+            pass

@@ -80,6 +80,20 @@ class Media(db.Model):
     # uploads/announcements/). Ist sie gesetzt, ist das Bild ein im Editor
     # erstelltes Ankündigungsbild und kann jederzeit wieder geöffnet werden.
     project_file = db.Column(String(200), nullable=True)
+    # Sprachvarianten eines Ankündigungsbildes: JSON-Dict {Sprache: Dateiname}
+    # für alle Sprachen außer der Standardsprache (die Standardsprache liegt
+    # in stored_name). Das Display wählt daraus die passende PNG je Sprache.
+    language_files = db.Column(Text, nullable=False, default="")
+
+    def language_files_dict(self) -> dict:
+        """Sprach-Map {lang: stored_name} (ohne die Standardsprache)."""
+        if not self.language_files:
+            return {}
+        try:
+            value = json.loads(self.language_files)
+            return value if isinstance(value, dict) else {}
+        except (TypeError, ValueError):
+            return {}
 
     def to_dict(self) -> dict:
         """Serielles Format für die API."""
@@ -94,6 +108,10 @@ class Media(db.Model):
             "sort_order": self.sort_order,
             "active": self.active,
             "project_file": self.project_file,
+            "languages": {
+                lang: f"/media/{self.type}/{name}"
+                for lang, name in self.language_files_dict().items()
+            },
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }
 

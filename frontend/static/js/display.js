@@ -31,7 +31,11 @@
   const LANGS = Signage.LANGS;
 
   let lang = localStorage.getItem("display_lang");
-  if (!LANGS.includes(lang)) lang = "de";
+  if (!LANGS.includes(lang)) {
+    // Automatische Sprachwahl beim ersten Start: Browser-/Gerätesprache.
+    const auto = String(navigator.language || "").toLowerCase();
+    lang = auto.indexOf("de") === 0 ? "de" : "en";
+  }
 
   let state = {
     settings: {},
@@ -49,9 +53,25 @@
   let currentAnnouncementId = null;
   let currentLayer = LAYER_A;
   let currentAudioUrl = null;
+  let currentShownUrl = null;   // URL des aktuell gerenderten Bildes/Videos
+  let currentSlotRef = null;    // zuletzt angezeigter Timeline-Slot
   let source = null;
 
   const nowSec = () => Date.now() / 1000 + skew;
+
+  /* Lokalisierter Text eines Ankündigungsbildes (Wetter-Überschrift o. Ä.):
+     Wert kann ein String sein (legacy) oder ein {de, en}-Objekt. */
+  function localizedText(value, l) {
+    if (value && typeof value === "object") return value[l] || value.de || "";
+    return value || "";
+  }
+
+  /* URL eines Medien-Slots: Ankündigungsbilder liefern eine Sprachvariante
+     je Sprache (Sprache wählt automatisch die passende PNG-Datei). */
+  function slotUrl(slot) {
+    if (slot && slot.languages && lang in slot.languages) return slot.languages[lang];
+    return slot ? slot.url : "";
+  }
 
   /* ---------- Einstellungen ---------- */
   function toInt(value, fallback, min, max) {
@@ -133,8 +153,11 @@
       CLOCK_WIDGET.style.left = "";
       CLOCK_WIDGET.style.top = "";
     }
-    // Uhr-Overlay nur während der Medienwiedergabe zeigen.
-    const showingMedia = currentKey !== "idle" && currentKey !== "weather-screen";
+    // Uhr-Overlay nur während der Medienwiedergabe zeigen – NIEMALS auf
+    // Wetterseiten (weder global noch die eigene Wetterseite eines
+    // Ankündigungsbildes).
+    const isAnnWeather = currentKey && currentKey.indexOf("weather-announcement:") === 0;
+    const showingMedia = currentKey !== "idle" && currentKey !== "weather-screen" && !isAnnWeather;
     if (!c.clockEnabled || !showingMedia) CLOCK_WIDGET.classList.add("hidden");
   }
 
@@ -179,7 +202,7 @@
     if (isAnnouncement) {
       const entry = (state.announcement_weather || {})[currentAnnouncementId];
       data = entry ? entry.weather : null;
-      opts = { heading: (entry && entry.heading) || "", todayOnly: true };
+      opts = { heading: localizedText(entry && entry.heading, lang), todayOnly: true };
     }
 
     // Das kleine Widget hängt am Widget-Schalter; die große Zwischenansicht
@@ -262,9 +285,11 @@
   function renderImage(slot) {
     const layer = nextLayer();
     clearLayer(layer);
+    const url = slotUrl(slot);
+    currentShownUrl = url;
     const img = document.createElement("img");
     img.className = "media";
-    img.src = slot.url;
+    img.src = url;
     img.alt = "";
     layer.appendChild(img);
     img.onload = () => {
@@ -277,9 +302,11 @@
   function renderVideo(slot) {
     const layer = nextLayer();
     clearLayer(layer);
+    const url = slotUrl(slot);
+    currentShownUrl = url;
     const video = document.createElement("video");
     video.className = "media";
-    video.src = slot.url;
+    video.src = url;
     video.autoplay = true;
     video.playsInline = true;
     video.volume = cfg().volume;
@@ -331,7 +358,13 @@
   }
 
   function showSlot(slot) {
-    if (!slot || slot.type === "clock") {
+    if (!slot) {
+      currentSlotRef = null;
+      showIdle();
+      return;
+    }
+    currentSlotRef = slot;
+    if (slot.type === "clock") {
       showIdle();
       return;
     }
@@ -345,7 +378,15 @@
     }
     const key = slot.type + ":" + slot.id;
     if (key === currentKey) {
-      syncVideo(slot);
+      // Live-Update: Der Server kann dieselbe Medien-ID mit einer neuen
+      // Datei (URL) versenden (z. B. Ankündigungsbild neu gespeichert) –
+      // dann muss das Medium trotz gleichem Schlüssel neu geladen werden.
+      if (slotUrl(slot) !== currentShownUrl) {
+        if (slot.type === "video") renderVideo(slot);
+        else renderImage(slot);
+      } else {
+        syncVideo(slot);
+      }
       return;
     }
     currentKey = key;
@@ -425,6 +466,10 @@
     localStorage.setItem("display_lang", lang);
     document.documentElement.lang = lang;
     if (LANG_BTN) LANG_BTN.textContent = lang.toUpperCase();
+    // Ankündigungsbilder mit Sprachvarianten: aktuelles Bild in der neuen
+    // Sprache neu laden (Sprachwechsel ohne Admin-Zutun).
+    const slot = currentSlotRef;
+    if (slot && slot.type === "image" && slotUrl(slot) !== currentShownUrl) renderImage(slot);
     updateClock();
     applyWeather();
   }

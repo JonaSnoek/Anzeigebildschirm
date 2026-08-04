@@ -139,6 +139,32 @@ def store_element_image(file_storage) -> tuple[str | None, str | None]:
     return stored_name, None
 
 
+def copy_media_to_element(media: Media) -> tuple[str | None, str | None]:
+    """
+    Kopiert ein Bild aus der Medienbibliothek als Editor-Element-Datei.
+    Liefert (Dateiname, Fehler). Das Original in der Bibliothek bleibt
+    unverändert; das Element bekommt eine eigene Kopie unter uploads/
+    announcements/, damit Löschen/Ändern der Bibliothek das Projekt nicht
+    beeinflusst.
+    """
+    if media is None or media.type != "image":
+        return None, "Kein gültiges Bild aus der Medienbibliothek."
+    ext = Path(media.stored_name or "").suffix.lower()
+    if ext not in _ALLOWED_ELEMENT_EXTS:
+        return None, "Dieses Dateiformat kann nicht als Element verwendet werden."
+    source = Config.UPLOAD_DIR / Config.UPLOAD_FOLDERS.get(media.type, media.type) / (media.stored_name or "")
+    if not source.exists():
+        return None, "Die Mediendatei ist nicht mehr vorhanden."
+    stored_name = f"el_{uuid.uuid4().hex}{ext}"
+    destination = announcements_dir() / stored_name
+    try:
+        shutil.copyfile(source, destination)
+    except OSError:
+        destination.unlink(missing_ok=True)
+        return None, "Das Bild konnte nicht übernommen werden."
+    return stored_name, None
+
+
 def element_image_files(project: dict) -> list[str]:
     """Alle Dateinamen, die Elemente eines Projekts als Bild referenzieren."""
     files = []
@@ -214,4 +240,16 @@ def duplicate_announcement(source: Media) -> Media:
         project_file=new_project_file,
     )
     save_project(copy, project)
+
+    # Sprachvarianten des Ankündigungsbildes ebenfalls kopieren (eigene
+    # Dateien, damit das Löschen der Kopie die Originale nicht entfernt).
+    new_lang = {}
+    for lang, name in (source.language_files_dict() or {}).items():
+        src_lang = Config.UPLOAD_DIR / "images" / name
+        if src_lang.exists():
+            new_name = f"{uuid.uuid4().hex}{Path(name).suffix}"
+            shutil.copy2(src_lang, Config.UPLOAD_DIR / "images" / new_name)
+            new_lang[lang] = new_name
+    if new_lang:
+        copy.language_files = json.dumps(new_lang)
     return copy

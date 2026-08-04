@@ -68,6 +68,11 @@ def _migrate_schema() -> None:
             db.text("ALTER TABLE media ADD COLUMN project_file VARCHAR(200)")
         )
         db.session.commit()
+    if "language_files" not in columns:
+        db.session.execute(
+            db.text("ALTER TABLE media ADD COLUMN language_files TEXT NOT NULL DEFAULT ''")
+        )
+        db.session.commit()
 
     # Wetter-Widget: neue Spalten für Höchst-/Mindesttemperatur und
     # Tagesverlauf (Morgen/Mittag/Abend).

@@ -40,6 +40,9 @@ def _announcement_configs(items) -> dict:
     """
     Liefert je Ankündigungsbild dessen Wetter-Konfiguration (aus der
     Projektdatei). Nur Bilder mit aktiviertem Wetter und Standort zählen.
+
+    Die Überschrift ist mehrsprachig: entweder ein String (legacy) oder ein
+    {Sprache: Text}-Dict. Das Display wählt die passende Sprache selbst.
     """
     out: dict = {}
     for m in items:
@@ -50,10 +53,15 @@ def _announcement_configs(items) -> dict:
         location = (w.get("location") or "").strip()
         if not w.get("enabled") or not location:
             continue
+        heading = w.get("heading") or ""
+        if isinstance(heading, dict):
+            heading = {k: str(v).strip() for k, v in heading.items() if v}
+        else:
+            heading = str(heading).strip()
         out[m.id] = {
             "enabled": True,
             "location": location,
-            "heading": (w.get("heading") or "").strip(),
+            "heading": heading,
         }
     return out
 
@@ -127,6 +135,10 @@ def _timeline_slots(items, settings: dict, aw_configs: dict = None):
             "id": item.id,
             "name": item.name,
             "url": f"/media/{item.type}/{item.stored_name}",
+            "languages": {
+                lang: f"/media/{item.type}/{name}"
+                for lang, name in (item.language_files_dict() or {}).items()
+            },
             "duration": _item_duration(item, slide),
         })
         # Direkt nach dem Ankündigungsbild dessen eigene Wetterseite einfügen.

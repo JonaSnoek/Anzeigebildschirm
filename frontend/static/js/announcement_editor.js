@@ -26,6 +26,15 @@
   const isNew = window.ANNOUNCEMENT_IS_NEW !== false;
   const bgPrefix = window.ANNOUNCEMENT_BG_PREFIX || "/api/announcements/bg/";
 
+  /* Sprachliche Bearbeitung: Jedes Ankündigungsbild wird mehrsprachig
+     erstellt (DE/EN). Beim Speichern entsteht eine PNG-Datei je Sprache;
+     das Display wählt automatisch die passende Variante. */
+  const DEFAULT_LANG = "de";
+  const EDITOR_LANGS = ["de", "en"];
+  const LANG_LABELS = { de: "Deutsch", en: "English" };
+  let editorLang = DEFAULT_LANG;   // aktuell bearbeitete/gerenderte Sprache
+  let exporting = false;           // Export: keine Auswahl-/Warn-Overlays
+
   let project = window.ANNOUNCEMENT_PROJECT && typeof window.ANNOUNCEMENT_PROJECT === "object"
     ? window.ANNOUNCEMENT_PROJECT
     : {};
@@ -139,18 +148,360 @@
   }
 
   /* ------------------------------------------------------------------ *
+   *  QR-Code-Encoder (byte mode, Versionen 1–10, ECC L/M/Q/H)
+   *  Clientseitig, damit Live-Vorschau und Export identisch sind.
+   * ------------------------------------------------------------------ */
+  const QRGen = (() => {
+    const EC_INDEX = { L: 1, M: 0, Q: 3, H: 2 };
+    const EC_BYTES = [
+      [0, 0, 0, 0],
+      [10, 7, 17, 13],
+      [16, 10, 28, 22],
+      [26, 15, 22, 18],
+      [18, 20, 16, 26],
+      [24, 26, 22, 18],
+      [16, 18, 28, 24],
+      [18, 20, 26, 18],
+      [22, 24, 26, 22],
+      [22, 30, 24, 20],
+      [26, 18, 28, 24],
+    ];
+    const BLOCKS = [
+      [0, 0, 0, 0],
+      [1, 1, 1, 1],
+      [1, 1, 1, 1],
+      [1, 1, 2, 2],
+      [2, 1, 4, 2],
+      [2, 1, 4, 4],
+      [4, 2, 4, 4],
+      [4, 2, 5, 6],
+      [4, 2, 6, 6],
+      [5, 2, 8, 8],
+      [5, 4, 8, 8],
+    ];
+    const TOTAL = [0, 26, 44, 70, 100, 134, 172, 196, 242, 292, 346];
+    const ALIGN = [null, [], [6, 18], [6, 22], [6, 26], [6, 30], [6, 34], [6, 22, 38], [6, 24, 42], [6, 26, 46], [6, 28, 50]];
+
+    const EXP = new Array(512);
+    const LOG = new Array(256);
+    (function () {
+      let x = 1;
+      for (let i = 0; i < 255; i++) {
+        EXP[i] = x;
+        LOG[x] = i;
+        x <<= 1;
+        if (x & 0x100) x ^= 0x11d;
+      }
+      for (let i = 255; i < 512; i++) EXP[i] = EXP[i - 255];
+    })();
+    const gm = (a, b) => (a === 0 || b === 0 ? 0 : EXP[LOG[a] + LOG[b]]);
+
+    function rsEncode(data, ecLen) {
+      let gen = [1];
+      for (let i = 0; i < ecLen; i++) {
+        const root = EXP[i];
+        const next = new Array(gen.length + 1).fill(0);
+        for (let j = 0; j < gen.length; j++) {
+          next[j] ^= gen[j];
+          next[j + 1] ^= gm(gen[j], root);
+        }
+        gen = next;
+      }
+      const res = new Array(ecLen).fill(0);
+      for (const d of data) {
+        const factor = d ^ res[0];
+        for (let j = 0; j < ecLen - 1; j++) res[j] = res[j + 1];
+        res[ecLen - 1] = 0;
+        if (factor) {
+          const lg = LOG[factor];
+          for (let j = 0; j < ecLen; j++) res[j] ^= EXP[LOG[gen[j + 1]] + lg];
+        }
+      }
+      return res;
+    }
+
+    const MASKS = [
+      (r, c) => (r + c) % 2 === 0,
+      (r, c) => r % 2 === 0,
+      (r, c) => c % 3 === 0,
+      (r, c) => (r + c) % 3 === 0,
+      (r, c) => (Math.floor(r / 2) + Math.floor(c / 3)) % 2 === 0,
+      (r, c) => (r * c) % 2 + (r * c) % 3 === 0,
+      (r, c) => ((r * c) % 2 + (r * c) % 3) % 2 === 0,
+      (r, c) => ((r + c) % 2 + (r * c) % 3) % 2 === 0,
+    ];
+
+    const bitLen = (n) => {
+      let d = 0;
+      while (n !== 0) { d++; n >>>= 1; }
+      return d;
+    };
+    const bch15 = (data) => {
+      let d = data << 10;
+      while (bitLen(d) - bitLen(0x537) >= 0) d ^= 0x537 << (bitLen(d) - bitLen(0x537));
+      return ((data << 10) | d) ^ 0x5412;
+    };
+    const bch18 = (data) => {
+      let d = data << 12;
+      while (bitLen(d) - bitLen(0x1f25) >= 0) d ^= 0x1f25 << (bitLen(d) - bitLen(0x1f25));
+      return (data << 12) | d;
+    };
+
+    let modules = null;
+    let func = null;
+    let size = 0;
+    let version = 0;
+    let eclIdx = 0;
+
+    function setupFinder(r0, c0) {
+      for (let r = -1; r <= 7; r++) {
+        for (let c = -1; c <= 7; c++) {
+          const rr = r0 + r, cc = c0 + c;
+          if (rr < 0 || rr >= size || cc < 0 || cc >= size) continue;
+          const on = r >= 0 && r <= 6 && c >= 0 && c <= 6 &&
+            (r === 0 || r === 6 || c === 0 || c === 6 || (r >= 2 && r <= 4 && c >= 2 && c <= 4));
+          modules[rr][cc] = on;
+          func[rr][cc] = true;
+        }
+      }
+    }
+
+    function setupAlignment() {
+      const pos = ALIGN[version];
+      if (!pos) return;
+      for (const ar of pos) {
+        for (const ac of pos) {
+          if ((ar <= 8 && ac <= 8) || (ar <= 8 && ac >= size - 9) || (ar >= size - 9 && ac <= 8)) continue;
+          for (let r = -2; r <= 2; r++) {
+            for (let c = -2; c <= 2; c++) {
+              const on = Math.abs(r) === 2 || Math.abs(c) === 2 || (r === 0 && c === 0);
+              modules[ar + r][ac + c] = on;
+              func[ar + r][ac + c] = true;
+            }
+          }
+        }
+      }
+    }
+
+    function setupTiming() {
+      for (let i = 8; i < size - 8; i++) {
+        if (!func[6][i]) { modules[6][i] = i % 2 === 0; func[6][i] = true; }
+        if (!func[i][6]) { modules[i][6] = i % 2 === 0; func[i][6] = true; }
+      }
+    }
+
+    function setupTypeInfo(test, maskPattern) {
+      const data = (eclIdx << 3) | maskPattern;
+      const bits = bch15(data);
+      for (let i = 0; i < 15; i++) {
+        const mod = !test && ((bits >> i) & 1) === 1;
+        if (i < 6) { modules[i][8] = mod; func[i][8] = true; }
+        else if (i < 8) { modules[i + 1][8] = mod; func[i + 1][8] = true; }
+        else { modules[size - 15 + i][8] = mod; func[size - 15 + i][8] = true; }
+        if (i < 8) { modules[8][size - i - 1] = mod; func[8][size - i - 1] = true; }
+        else if (i < 9) { modules[8][15 - i - 1 + 1] = mod; func[8][15 - i - 1 + 1] = true; }
+        else { modules[8][15 - i - 1] = mod; func[8][15 - i - 1] = true; }
+      }
+      modules[size - 8][8] = !test;
+      func[size - 8][8] = true;
+    }
+
+    function setupTypeNumber(test) {
+      const bits = bch18(version);
+      for (let i = 0; i < 18; i++) {
+        const mod = !test && ((bits >> i) & 1) === 1;
+        modules[Math.floor(i / 3)][(i % 3) + size - 11] = mod;
+        func[Math.floor(i / 3)][(i % 3) + size - 11] = true;
+        modules[(i % 3) + size - 11][Math.floor(i / 3)] = mod;
+        func[(i % 3) + size - 11][Math.floor(i / 3)] = true;
+      }
+    }
+
+    function createData(bytes) {
+      const ecLen = EC_BYTES[version][eclIdx];
+      const blocks = BLOCKS[version][eclIdx];
+      const dataTotal = TOTAL[version] - ecLen * blocks;
+      const shortData = Math.floor(dataTotal / blocks);
+      const longCount = dataTotal % blocks;
+      const shortCount = blocks - longCount;
+
+      const bits = [];
+      const push = (n, len) => { for (let i = len - 1; i >= 0; i--) bits.push((n >> i) & 1); };
+      push(0x4, 4);
+      push(bytes.length, version >= 10 ? 16 : 8);
+      for (const b of bytes) push(b, 8);
+      const rem = dataTotal * 8 - bits.length;
+      if (rem > 0) push(0, Math.min(4, rem));
+      while (bits.length % 8 !== 0) bits.push(0);
+      let pad = 0xec;
+      while (bits.length < dataTotal * 8) { push(pad, 8); pad = pad === 0xec ? 0x11 : 0xec; }
+
+      const dataCW = [];
+      for (let i = 0; i < dataTotal; i++) {
+        let b = 0;
+        for (let j = 0; j < 8; j++) b = (b << 1) | bits[i * 8 + j];
+        dataCW.push(b);
+      }
+
+      const dataBlocks = [];
+      let ptr = 0;
+      for (let i = 0; i < blocks; i++) {
+        const d = i < shortCount ? shortData : shortData + 1;
+        dataBlocks.push(dataCW.slice(ptr, ptr + d));
+        ptr += d;
+      }
+      const ecBlocks = dataBlocks.map((d) => rsEncode(d, ecLen));
+      const out = [];
+      for (let i = 0; i < shortData + (longCount ? 1 : 0); i++) {
+        for (let b = 0; b < blocks; b++) {
+          if (i < dataBlocks[b].length) out.push(dataBlocks[b][i]);
+        }
+      }
+      for (let i = 0; i < ecLen; i++) {
+        for (let b = 0; b < blocks; b++) out.push(ecBlocks[b][i]);
+      }
+      return out;
+    }
+
+    function mapData(data, maskPattern) {
+      const dataBits = [];
+      for (const byte of data) for (let i = 7; i >= 0; i--) dataBits.push((byte >> i) & 1);
+      let bitIndex = 0;
+      let inc = -1;
+      let row = size - 1;
+      for (let col = size - 1; col > 0; col -= 2) {
+        if (col === 6) col--;
+        while (true) {
+          for (let c = 0; c < 2; c++) {
+            if (!func[row][col - c]) {
+              let dark = false;
+              if (bitIndex < dataBits.length) dark = dataBits[bitIndex];
+              bitIndex++;
+              if (MASKS[maskPattern](row, col - c)) dark = !dark;
+              modules[row][col - c] = dark;
+              func[row][col - c] = true;
+            }
+          }
+          row += inc;
+          if (row < 0 || row >= size) { row -= inc; inc = -inc; break; }
+        }
+      }
+    }
+
+    function lostPoint() {
+      let lost = 0;
+      for (let row = 0; row < size; row++) {
+        for (let col = 0; col < size; col++) {
+          let same = 0;
+          const dark = modules[row][col];
+          for (let r = -1; r <= 1; r++) {
+            if (row + r < 0 || row + r >= size) continue;
+            for (let c = -1; c <= 1; c++) {
+              if (r === 0 && c === 0) continue;
+              if (col + c < 0 || col + c >= size) continue;
+              if (dark === modules[row + r][col + c]) same++;
+            }
+          }
+          if (same > 5) lost += 3 + same - 5;
+        }
+      }
+      for (let row = 0; row < size - 1; row++) {
+        for (let col = 0; col < size - 1; col++) {
+          let count = 0;
+          if (modules[row][col]) count++;
+          if (modules[row + 1][col]) count++;
+          if (modules[row][col + 1]) count++;
+          if (modules[row + 1][col + 1]) count++;
+          if (count === 0 || count === 4) lost += 3;
+        }
+      }
+      for (let row = 0; row < size; row++) {
+        for (let col = 0; col < size - 6; col++) {
+          if (modules[row][col] && !modules[row][col + 1] && modules[row][col + 2] &&
+              modules[row][col + 3] && modules[row][col + 4] && !modules[row][col + 5] && modules[row][col + 6]) {
+            lost += 40;
+          }
+        }
+      }
+      for (let col = 0; col < size; col++) {
+        for (let row = 0; row < size - 6; row++) {
+          if (modules[row][col] && !modules[row + 1][col] && modules[row + 2][col] &&
+              modules[row + 3][col] && modules[row + 4][col] && !modules[row + 5][col] && modules[row + 6][col]) {
+            lost += 40;
+          }
+        }
+      }
+      let darkCount = 0;
+      for (let r = 0; r < size; r++) for (let c = 0; c < size; c++) if (modules[r][c]) darkCount++;
+      const ratio = Math.abs((100 * darkCount) / size / size - 50) / 5;
+      lost += ratio * 10;
+      return lost;
+    }
+
+    function makeImpl(bytes, maskPattern, test) {
+      size = version * 4 + 17;
+      modules = [];
+      func = [];
+      for (let i = 0; i < size; i++) {
+        modules.push(new Array(size).fill(false));
+        func.push(new Array(size).fill(false));
+      }
+      setupFinder(0, 0);
+      setupFinder(size - 7, 0);
+      setupFinder(0, size - 7);
+      setupAlignment();
+      setupTiming();
+      setupTypeInfo(test, maskPattern);
+      if (version >= 7) setupTypeNumber(test);
+      mapData(bytes, maskPattern);
+    }
+
+    function make(input, ecl) {
+      const enc = new TextEncoder().encode(String(input || ""));
+      ecl = (ecl || "M").toUpperCase();
+      if (!(ecl in EC_INDEX)) ecl = "M";
+      eclIdx = EC_INDEX[ecl];
+      version = 0;
+      for (let v = 1; v <= 10; v++) {
+        const dataCW = TOTAL[v] - EC_BYTES[v][eclIdx] * BLOCKS[v][eclIdx];
+        const cap = Math.floor((dataCW * 8 - 4 - (v >= 10 ? 16 : 8)) / 8);
+        if (enc.length <= cap) { version = v; break; }
+      }
+      if (!version) return null;
+      const data = createData(enc);
+      let bestMask = 0, minLoss = Infinity;
+      for (let m = 0; m < 8; m++) {
+        makeImpl(data, m, true);
+        const loss = lostPoint();
+        if (loss < minLoss) { minLoss = loss; bestMask = m; }
+      }
+      makeImpl(data, bestMask, false);
+      const out = [];
+      for (let r = 0; r < size; r++) out.push(modules[r].slice());
+      return out;
+    }
+
+    return { make };
+  })();
+
+  /* ------------------------------------------------------------------ *
    *  Element-Fabriken
    * ------------------------------------------------------------------ */
   function textEl(over) {
+    const o = over || {};
+    const texts = o.texts && typeof o.texts === "object"
+      ? Object.assign({}, o.texts)
+      : { [DEFAULT_LANG]: o.text != null ? String(o.text) : "Text" };
     return Object.assign({
       id: uid(), type: "text", x: 100, y: 100, w: 900, h: 110, rotation: 0, opacity: 1,
-      text: "Text", font: "Verdana", size: 60, color: "#FFFFFF",
+      text: o.text != null ? String(o.text) : (texts[DEFAULT_LANG] != null ? String(texts[DEFAULT_LANG]) : "Text"),
+      font: "Verdana", size: 60, color: "#FFFFFF",
       bgColor: "", bgOpacity: 0, radius: 14, glass: false,
       bold: false, italic: false, underline: false, strike: false, caseMode: "none",
       lineHeight: 1.25, letterSpacing: 0, align: "left", valign: "middle", pad: 16,
       shadow: { enabled: false, color: "rgba(0,0,0,.6)", blur: 10, dx: 0, dy: 4 },
       outline: { enabled: false, color: "#000000", width: 3 },
-    }, over || {});
+    }, o, { texts });
   }
   function shapeEl(over) {
     return Object.assign({
@@ -175,12 +526,23 @@
     }, over || {});
   }
   function weatherEl(over) {
+    const o = over || {};
+    const locations = o.locations && typeof o.locations === "object"
+      ? Object.assign({}, o.locations)
+      : { [DEFAULT_LANG]: o.location != null ? String(o.location) : "" };
     return Object.assign({
       id: uid(), type: "weather", x: 100, y: 100, w: 560, h: 150, rotation: 0, opacity: 1,
-      location: "", font: "Verdana", size: 42, textColor: "#FFFFFF",
+      location: o.location != null ? String(o.location) : "",
+      font: "Verdana", size: 42, textColor: "#FFFFFF",
       accentColor: "#7fb2ff", iconColor: "#8fc7ff",
       bgColor: "#0b1220", bgOpacity: 0.55, glass: true, radius: 24,
       showIcon: true, showDesc: true, showTemp: true,
+    }, o, { locations });
+  }
+  function qrcodeEl(over) {
+    return Object.assign({
+      id: uid(), type: "qrcode", x: 100, y: 100, w: 320, h: 320, rotation: 0, opacity: 1,
+      url: "", color: "#0b1220", bg: "white", quietZone: true, ecc: "M",
     }, over || {});
   }
 
@@ -188,7 +550,10 @@
    *  Migration alter Projektversionen (v1 -> v2)
    * ------------------------------------------------------------------ */
   function migrateProject(p) {
-    if (p && p.version === 2 && Array.isArray(p.elements)) return p;
+    if (p && p.version === 2 && Array.isArray(p.elements)) {
+      normalizeLocalization(p);
+      return p;
+    }
     p = p || {};
     const elements = [];
     const title = p.title || {}, underline = p.underline || {};
@@ -259,7 +624,7 @@
       }
     }
 
-    return {
+    const out = {
       version: 2,
       name: p.name || "",
       width: W, height: H,
@@ -275,6 +640,43 @@
         heading: (p.weather && p.weather.heading) || "",
       },
     };
+    normalizeLocalization(out);
+    return out;
+  }
+
+  /* Stellt sicher, dass mehrsprachige Felder (texts/locations/heading)
+     überall als Sprach-Map vorliegen – alte Projekte mit einem String
+     werden automatisch auf die Standardsprache (Deutsch) übertragen. */
+  function normalizeLocalization(p) {
+    if (!Array.isArray(p.languages) || !p.languages.length) p.languages = EDITOR_LANGS.slice();
+    if (!p.languages.includes(DEFAULT_LANG)) p.languages.unshift(DEFAULT_LANG);
+    p.defaultLanguage = DEFAULT_LANG;
+    const w = p.weather || {};
+    if (w.heading && typeof w.heading === "string") {
+      w.heading = { [DEFAULT_LANG]: w.heading };
+    } else if (w.heading && typeof w.heading === "object") {
+      if (!w.heading[DEFAULT_LANG]) {
+        const first = Object.values(w.heading).find((v) => v != null && String(v) !== "");
+        w.heading[DEFAULT_LANG] = first != null ? String(first) : "";
+      }
+    } else {
+      w.heading = { [DEFAULT_LANG]: "" };
+    }
+    for (const el of p.elements || []) {
+      if (el.type === "text") {
+        if (!el.texts || typeof el.texts !== "object") {
+          el.texts = {};
+          if (el.text != null) el.texts[DEFAULT_LANG] = String(el.text);
+        }
+        if (el.texts[DEFAULT_LANG] == null && el.text != null) el.texts[DEFAULT_LANG] = String(el.text);
+      } else if (el.type === "weather") {
+        if (!el.locations || typeof el.locations !== "object") {
+          el.locations = {};
+          if (el.location != null) el.locations[DEFAULT_LANG] = String(el.location);
+        }
+        if (el.locations[DEFAULT_LANG] == null && el.location != null) el.locations[DEFAULT_LANG] = String(el.location);
+      }
+    }
   }
 
   /* ------------------------------------------------------------------ *
@@ -302,14 +704,49 @@
     .then((d) => { globalWeather = d && d.weather ? d.weather : null; render(); })
     .catch(() => {});
 
-  function formatDate() {
+  function formatDate(lang) {
     try {
-      return new Date().toLocaleDateString("de-DE", {
+      return new Date().toLocaleDateString(lang === "en" ? "en-US" : "de-DE", {
         weekday: "long", day: "numeric", month: "long", year: "numeric",
       });
     } catch (e) {
       return new Date().toLocaleDateString();
     }
+  }
+
+  /* Lokalisierter Inhalt eines Elements: bevorzugt die aktuelle Sprache,
+     Fallback auf die Standardsprache (Deutsch), dann auf das Legacy-Feld. */
+  function localized(el, key, lang) {
+    const map = el && el[key + "s"];
+    if (map && typeof map === "object") {
+      if (map[lang] != null && String(map[lang]) !== "") return String(map[lang]);
+      if (map[DEFAULT_LANG] != null && String(map[DEFAULT_LANG]) !== "") return String(map[DEFAULT_LANG]);
+      for (const v of Object.values(map)) if (v != null && String(v) !== "") return String(v);
+    }
+    return el && el[key] != null ? String(el[key]) : "";
+  }
+
+  /* Fehlt die Übersetzung der aktuellen Bearbeitungssprache, obwohl in
+     einer anderen Sprache Inhalt hinterlegt ist? (Editor-Kennzeichnung.) */
+  function missingCurrentTranslation(el) {
+    const key = el.type === "text" ? "text" : el.type === "weather" ? "location" : null;
+    if (!key) return false;
+    const map = el[key + "s"];
+    if (!map || typeof map !== "object") return false;
+    const cur = map[editorLang];
+    const hasAny = Object.values(map).some((v) => v != null && String(v) !== "");
+    return hasAny && (cur == null || String(cur) === "");
+  }
+
+  /* Wetterbeschreibung im Editor auf Englisch/Deutsch – sprachabhängig,
+     wie auf dem Display (Zustands-Schlüssel aus den Wetterdaten). */
+  const WEATHER_DESC = {
+    de: { sun: "Sonnig", "cloud-sun": "Leicht bewölkt", cloud: "Bewölkt", fog: "Nebel", rain: "Regen", showers: "Regenschauer", storm: "Gewitter", snow: "Schnee" },
+    en: { sun: "Sunny", "cloud-sun": "Partly Cloudy", cloud: "Cloudy", fog: "Fog", rain: "Rain", showers: "Showers", storm: "Thunderstorm", snow: "Snow" },
+  };
+  function localizedWeatherDesc(state, lang) {
+    const m = WEATHER_DESC[lang] || WEATHER_DESC[DEFAULT_LANG];
+    return (m && m[state]) || "";
   }
 
   function applyCase(text, mode) {
@@ -536,7 +973,7 @@
       c.restore();
     }
 
-    const text = applyCase(String(el.text == null ? "" : el.text).replace(/%DATE%/g, formatDate()), el.caseMode);
+    const text = applyCase(String(localized(el, "text", editorLang) || "").replace(/%DATE%/g, formatDate(editorLang)), el.caseMode);
     if (!text.trim()) { c.restore(); return; }
     const font = fontOf(el);
     const pad = clamp(num(el.pad, 16), 4, 80);
@@ -737,6 +1174,7 @@
     const today = data && data.today ? data.today : null;
     const pad = 24;
     const size = clamp(num(el.size, 42), 10, 200);
+    const locText = String(localized(el, "location", editorLang) || (data && data.location) || "");
 
     if (el.showIcon) {
       const is = el.h - pad * 2;
@@ -749,8 +1187,8 @@
     c.fillStyle = el.accentColor || "#7fb2ff";
     c.textAlign = "left";
     c.textBaseline = "alphabetic";
-    const loc = (el.location || (data && data.location) || "").toUpperCase();
-    c.fillText(loc || "WETTER", textX, pad + Math.max(14, size * 0.62));
+    const fallbackHeading = editorLang === "en" ? "WEATHER" : "WETTER";
+    c.fillText(locText ? locText.toUpperCase() : fallbackHeading, textX, pad + Math.max(14, size * 0.62));
 
     const big = clamp(size, 20, 240);
     if (el.showTemp && today) {
@@ -768,8 +1206,64 @@
       const descY = pad + Math.max(14, size * 0.62) + Math.max(16, big * 0.62);
       c.font = Math.max(13, size * 0.4) + "px " + (el.font || "Verdana");
       c.fillStyle = el.textColor || "#FFFFFF";
-      const desc = today && today.desc ? today.desc : "—";
+      const state = today && (today.state || today.icon);
+      const desc = today ? (localizedWeatherDesc(state, editorLang) || today.desc || "—") : "—";
       c.fillText(desc, textX, descY + 4);
+    }
+    c.restore();
+  }
+
+  function drawQrOn(c, el) {
+    c.save();
+    c.translate(el.x + el.w / 2, el.y + el.h / 2);
+    c.rotate((num(el.rotation, 0) * Math.PI) / 180);
+    c.translate(-el.w / 2, -el.h / 2);
+    c.globalAlpha = clamp(num(el.opacity, 1), 0, 1);
+
+    const mat = el.url && String(el.url).trim() ? QRGen.make(String(el.url).trim(), el.ecc || "M") : null;
+    const r = clamp(num(el.radius, 0), 0, Math.min(el.w, el.h) / 2);
+    const qz = el.quietZone !== false ? 4 : 0;
+
+    if (el.bg !== "transparent") {
+      roundedRectPath(c, 0, 0, el.w, el.h, r);
+      c.fillStyle = el.bg === "white" ? "#FFFFFF" : el.bg || "#FFFFFF";
+      c.fill();
+    } else if (r > 0) {
+      roundedRectPath(c, 0, 0, el.w, el.h, r);
+      c.clip();
+    }
+
+    if (!mat) {
+      c.fillStyle = "rgba(0,0,0,.55)";
+      c.font = "16px Verdana, sans-serif";
+      c.textAlign = "center";
+      c.textBaseline = "middle";
+      c.fillText("Link eingeben", el.w / 2, el.h / 2);
+      c.restore();
+      return;
+    }
+
+    const n = mat.length;
+    const cells = n + qz * 2;
+    const scale = Math.min(el.w / cells, el.h / cells);
+    const dw = cells * scale, dh = cells * scale;
+    const ox = (el.w - dw) / 2, oy = (el.h - dh) / 2;
+
+    c.fillStyle = el.color || "#0b1220";
+    if (scale >= 1) {
+      for (let row = 0; row < n; row++) {
+        for (let col = 0; col < n; col++) {
+          if (mat[row][col]) c.fillRect(ox + (col + qz) * scale, oy + (row + qz) * scale, scale, scale);
+        }
+      }
+    } else {
+      const path = new Path2D();
+      for (let row = 0; row < n; row++) {
+        for (let col = 0; col < n; col++) {
+          if (mat[row][col]) path.rect(ox + (col + qz) * scale, oy + (row + qz) * scale, scale, scale);
+        }
+      }
+      c.fill(path);
     }
     c.restore();
   }
@@ -781,6 +1275,7 @@
       case "image": return drawImageOn(c, el);
       case "icon": return drawIconOn(c, el);
       case "weather": return drawWeatherOn(c, el);
+      case "qrcode": return drawQrOn(c, el);
       default: return;
     }
   }
@@ -896,12 +1391,32 @@
     drawOverlayOn(ctx, project);
     if (project.grid && project.grid.enabled) drawGridOn(ctx, project);
     for (const el of project.elements) drawElementOn(ctx, el);
-    if (selectedId) {
+    if (!exporting && selectedId) {
       const sel = selected();
       if (sel) drawSelectionOn(ctx, sel);
     }
+    if (!exporting) {
+      // Fehlende Übersetzung der Bearbeitungssprache deutlich markieren.
+      for (const el of project.elements) {
+        if (missingCurrentTranslation(el)) drawMissingTranslation(ctx, el);
+      }
+    }
     drawGuidesOn(ctx, guides);
     refreshInspectorValues();
+  }
+
+  function drawMissingTranslation(c, el) {
+    c.save();
+    c.translate(el.x + el.w / 2, el.y + el.h / 2);
+    c.rotate((num(el.rotation, 0) * Math.PI) / 180);
+    c.translate(-el.w / 2, -el.h / 2);
+    c.strokeStyle = "#fbbf24";
+    c.lineWidth = 3;
+    c.setLineDash([10, 7]);
+    roundedRectPath(c, -7, -7, el.w + 14, el.h + 14, Math.min(18, (el.w + 14) / 2));
+    c.stroke();
+    c.setLineDash([]);
+    c.restore();
   }
 
   function selected() {
@@ -1162,7 +1677,7 @@
       selectedId = el.id;
       renderLayers();
       renderInspector();
-      const ta = document.querySelector('[data-bind="text"]');
+      const ta = document.querySelector('[data-bind="texts.' + editorLang + '"]') || document.querySelector('[data-bind="text"]');
       if (ta) { ta.focus(); ta.select(); }
       render();
     }
@@ -1254,10 +1769,113 @@
     { type: "circle", label: "Kreis", svg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8"/></svg>' },
     { type: "accent", label: "Akzentstreifen", svg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 10h16 M4 14h10"/></svg>' },
     { type: "weather", label: "Wetter-Widget", svg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 10.5a4 4 0 0 0-7.5-1.6A3.5 3.5 0 0 0 10 15h8a3.5 3.5 0 0 0 0-4.5zM9 6V4 M6.5 8.5L5 7 M6 13H4"/></svg>' },
-    { type: "qrcode", label: "QR-Code", disabled: true, badge: "bald", svg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3 M20 14v3 M14 20h3"/></svg>' },
+    { type: "qrcode", label: "QR-Code", svg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3 M20 14v3 M14 20h3"/></svg>' },
   ];
 
-  let fileInput = null;
+  /* ------------------------------------------------------------------ *
+   *  Bild-/Logo-Picker (Medienbibliothek + Hochladen)
+   * ------------------------------------------------------------------ */
+  function openImagePicker(fit, onPick) {
+    const head = modal.querySelector(".ae-modal-head h2");
+    if (head) head.textContent = fit === "contain" ? "Logo einfügen" : "Bild einfügen";
+    modalBody.innerHTML = `
+      <div class="ae-picker-tabs">
+        <button type="button" class="active" data-pane="lib">Medienbibliothek</button>
+        <button type="button" data-pane="upload">Hochladen</button>
+      </div>
+      <div class="ae-picker-pane" data-pane="lib">
+        <div class="ae-media-grid" id="ae-media-grid"><p class="ae-hint">Lädt Medien …</p></div>
+      </div>
+      <div class="ae-picker-pane hidden" data-pane="upload">
+        <label class="ae-upload-drop">
+          <input type="file" id="ae-picker-file" accept=".png,.jpg,.jpeg,.gif,.webp,.svg">
+          <span>Datei auswählen oder hierher ziehen …</span>
+        </label>
+        <p class="ae-hint">PNG, JPG, WebP oder SVG. Das Bild wird hochgeladen und in das Design eingefügt.</p>
+      </div>`;
+    modal.classList.remove("hidden");
+
+    modalBody.querySelectorAll(".ae-picker-tabs button").forEach((b) => {
+      b.addEventListener("click", () => {
+        modalBody.querySelectorAll(".ae-picker-tabs button").forEach((x) => x.classList.toggle("active", x === b));
+        modalBody.querySelectorAll(".ae-picker-pane").forEach((p) => p.classList.toggle("hidden", p.dataset.pane !== b.dataset.pane));
+        if (b.dataset.pane === "lib") loadPickerLibrary(fit, onPick);
+      });
+    });
+
+    const file = document.getElementById("ae-picker-file");
+    if (file) file.addEventListener("change", () => {
+      const f = file.files && file.files[0];
+      if (f) pickerUpload(f, fit, onPick);
+    });
+
+    loadPickerLibrary(fit, onPick);
+  }
+
+  function loadPickerLibrary(fit, onPick) {
+    fetch("/api/media?type=image")
+      .then((r) => r.json())
+      .then((data) => {
+        const grid = document.getElementById("ae-media-grid");
+        if (!grid) return;
+        const items = data.items || [];
+        if (!items.length) {
+          grid.innerHTML = `<p class="ae-hint">Keine Bilder in der Medienbibliothek. Lade über den Tab „Hochladen" ein Bild hoch.</p>`;
+          return;
+        }
+        grid.innerHTML = "";
+        for (const m of items) {
+          const cell = document.createElement("div");
+          cell.className = "ae-media-cell";
+          cell.title = m.name || m.url;
+          cell.innerHTML = `<img src="${esc(m.url)}" alt="" loading="lazy"><span class="ae-media-name">${esc(m.name || "")}</span>`;
+          cell.addEventListener("click", () => {
+            fetch("/api/announcements/from-media/" + m.id, {
+              method: "POST",
+              headers: { "X-CSRF-Token": csrfToken() },
+            })
+              .then((r) => r.json())
+              .then((data) => {
+                if (!data.ok || !data.file) throw new Error(data.error || "Übernahme fehlgeschlagen.");
+                finishPicking(data.file, fit, onPick);
+              })
+              .catch((err) => { if (window.toast) window.toast(err.message, "error"); });
+          });
+          grid.appendChild(cell);
+        }
+      })
+      .catch(() => {
+        const grid = document.getElementById("ae-media-grid");
+        if (grid) grid.innerHTML = `<p class="ae-hint">Medienbibliothek konnte nicht geladen werden.</p>`;
+      });
+  }
+
+  function pickerUpload(file, fit, onPick) {
+    const fd = new FormData();
+    fd.append("file", file);
+    fetch("/api/announcements/elements", {
+      method: "POST",
+      headers: { "X-CSRF-Token": csrfToken() },
+      body: fd,
+    })
+      .then((r) => r.json())
+      .then((data) => {
+        if (!data.file) throw new Error(data.error || "Upload fehlgeschlagen.");
+        finishPicking(data.file, fit, onPick);
+      })
+      .catch((err) => { if (window.toast) window.toast(err.message, "error"); });
+  }
+
+  function finishPicking(file, fit, onPick) {
+    modal.classList.add("hidden");
+    if (onPick) { onPick(file); return; }
+    const el = imageEl({ file: file, fit: fit || "cover", x: W / 2 - 260, y: H / 2 - 170, w: 520, h: 340, radius: 0 });
+    project.elements.push(el);
+    selectedId = el.id;
+    renderLayers();
+    renderInspector();
+    loadImage(file);
+  }
 
   function addElement(itemType) {
     let el = null;
@@ -1281,20 +1899,7 @@
         break;
       case "image":
       case "logo":
-        if (!fileInput) {
-          fileInput = document.createElement("input");
-          fileInput.type = "file";
-          fileInput.accept = ".png,.jpg,.jpeg,.gif,.webp,.svg";
-          fileInput.style.display = "none";
-          document.body.appendChild(fileInput);
-          fileInput.addEventListener("change", () => {
-            const f = fileInput.files && fileInput.files[0];
-            if (f) addImageElementWithFile(f, fileInput.dataset.fit || "cover");
-            fileInput.value = "";
-          });
-        }
-        fileInput.dataset.fit = itemType === "logo" ? "contain" : "cover";
-        fileInput.click();
+        openImagePicker(itemType === "logo" ? "contain" : "cover");
         return;
       case "icon":
         el = iconEl({ icon: "star", color: "#7fb2ff", x: cw(64), y: ch(64), w: 64, h: 64 });
@@ -1313,6 +1918,9 @@
         break;
       case "weather":
         el = weatherEl({ x: cw(560), y: 700, w: 560, h: 150 });
+        break;
+      case "qrcode":
+        el = qrcodeEl({ x: cw(340), y: ch(340), w: 340, h: 340, url: "https://", bg: "white", quietZone: true, color: "#0b1220" });
         break;
       default:
         return;
@@ -1363,22 +1971,24 @@
    *  Ebenen
    * ------------------------------------------------------------------ */
   const TYPE_LABELS = {
-    text: "Text", shape: "Form", image: "Bild", icon: "Icon", weather: "Wetter",
+    text: "Text", shape: "Form", image: "Bild", icon: "Icon", weather: "Wetter", qrcode: "QR-Code",
   };
   const TYPE_ICON = {
-    text: "T", shape: "▭", image: iconSvg("camera", 14), icon: iconSvg("star", 14), weather: iconSvg("info", 14),
+    text: "T", shape: "▭", image: iconSvg("camera", 14), icon: iconSvg("star", 14), weather: iconSvg("info", 14), qrcode: iconSvg("arrow", 14),
   };
   function layerLabel(el) {
     if (el.type === "text") {
-      if (el.text && el.text.indexOf("%DATE%") >= 0) return "Datum";
-      const t = String(el.text || "").trim();
-      if (t) return t.split("\n")[0].slice(0, 24);
+      const t = localized(el, "text", editorLang);
+      if (t.indexOf("%DATE%") >= 0) return "Datum";
+      const trimmed = String(t || "").trim();
+      if (trimmed) return trimmed.split("\n")[0].slice(0, 24);
       return "Text";
     }
     if (el.type === "shape") return el.shape === "line" ? "Linie" : el.shape === "ellipse" ? "Kreis" : "Rechteck";
     if (el.type === "image") return el.fit === "contain" ? "Logo" : "Bild";
     if (el.type === "icon") return ICON_LABELS[el.icon] || "Icon";
     if (el.type === "weather") return "Wetter-Widget";
+    if (el.type === "qrcode") return "QR-Code";
     return "Element";
   }
 
@@ -1477,6 +2087,7 @@
     else if (el.type === "icon") html += iconControls(el);
     else if (el.type === "shape") html += shapeControls(el);
     else if (el.type === "weather") html += weatherControls(el);
+    else if (el.type === "qrcode") html += qrControls(el);
 
     html += `<div class="ae-insp-sub">Position &amp; Größe</div>`;
     html += `<div class="ae-num-grid">
@@ -1498,6 +2109,17 @@
     html += `</div>`;
     inspector.innerHTML = html;
     wireInspector(el);
+  }
+
+  function setEditorLang(l) {
+    if (!EDITOR_LANGS.includes(l) || l === editorLang) return;
+    editorLang = l;
+    const sw = document.getElementById("ae-editor-lang-switch");
+    if (sw) sw.querySelectorAll("[data-editor-lang]").forEach((b) => b.classList.toggle("active", b.dataset.editorLang === l));
+    renderLayers();
+    renderInspector();
+    renderWeatherInspector();
+    render();
   }
 
   function numField(path, label) {
@@ -1532,9 +2154,22 @@
     return `<label class="ae-check-line"><input type="checkbox" data-bind="${path}" data-kind="check"> ${esc(label)}</label>`;
   }
 
+  function langTabs() {
+    return `<div class="ae-lang-tabs">${EDITOR_LANGS.map((l) =>
+      `<button type="button" class="ae-lang-tab${l === editorLang ? " active" : ""}" data-el-lang="${l}" title="${esc(LANG_LABELS[l])}">${l === "de" ? "🇩🇪" : "🇬🇧"} ${l.toUpperCase()}</button>`
+    ).join("")}</div>`;
+  }
+
+  function missingBadge() {
+    return `<div class="ae-missing-badge" title="Für diese Sprache ist noch kein Inhalt hinterlegt – auf dem Bildschirm wird die deutsche Fassung gezeigt.">⚠ Übersetzung fehlt (zeigt ${esc(LANG_LABELS[DEFAULT_LANG])})</div>`;
+  }
+
   function textControls(el) {
     let h = "";
-    h += textRow("text", "Text", "Text eingeben …", 3);
+    h += `<div class="ae-insp-sub">Sprache</div>`;
+    h += langTabs();
+    if (missingCurrentTranslation(el)) h += missingBadge();
+    h += textRow("texts." + editorLang, "Text (" + esc(LANG_LABELS[editorLang]) + ")", "Text eingeben …", 3);
     h += selectRow("font", "Schriftart", FONTS.map((f) => [f, f]));
     h += rangeRow("size", "Schriftgröße", 8, 400, 1, "px");
     h += colorRow("color", "Schriftfarbe");
@@ -1644,7 +2279,10 @@
 
   function weatherControls(el) {
     let h = "";
-    h += inputRow("location", "Überschrift / Ort", "z. B. Berlin");
+    h += `<div class="ae-insp-sub">Sprache</div>`;
+    h += langTabs();
+    if (missingCurrentTranslation(el)) h += missingBadge();
+    h += inputRow("locations." + editorLang, "Überschrift / Ort (" + esc(LANG_LABELS[editorLang]) + ")", "z. B. Berlin");
     h += colorRow("textColor", "Textfarbe");
     h += colorRow("accentColor", "Akzentfarbe");
     h += colorRow("iconColor", "Symbolfarbe");
@@ -1654,6 +2292,18 @@
     h += checkRow("Temperatur anzeigen", "showTemp");
     h += checkRow("Beschreibung anzeigen", "showDesc");
     h += `<div class="ae-hint">Zeigt das aktuelle Wetter (Stand: Speichern) – wie beim Wetter-Widget.</div>`;
+    return h;
+  }
+
+  function qrControls(el) {
+    let h = "";
+    h += inputRow("url", "Link", "https://…");
+    h += selectRow("ecc", "Fehlerkorrektur", [["L", "L – niedrig (~7%)"], ["M", "M – mittel (~15%)"], ["Q", "Q – hoch (~25%)"], ["H", "H – sehr hoch (~30%)"]]);
+    h += colorRow("color", "Modul-Farbe");
+    h += selectRow("bg", "Hintergrund", [["white", "Weiß"], ["transparent", "Transparent"]]);
+    h += checkRow("Quiet Zone (weißer Rand)", "quietZone");
+    h += rangeRow("radius", "Ecken abrunden", 0, 200, 1, "px");
+    h += `<div class="ae-hint">Vorschau und Export sind identisch – der QR-Code wird direkt auf der Leinwand erzeugt.</div>`;
     return h;
   }
 
@@ -1719,15 +2369,12 @@
         if (act === "duplicate") pasteElement(el, 24);
         if (act === "delete") deleteElement(el);
         if (act === "pick-image") {
-          const f = b.querySelector("input[type=file]");
-          if (f) {
-            f.addEventListener("change", () => {
-              const file = f.files && f.files[0];
-              if (file) replaceElementImage(el, file);
-              f.value = "";
-            }, { once: true });
-            f.click();
-          }
+          openImagePicker(el.fit === "contain" ? "contain" : "cover", (file) => {
+            el.file = file;
+            loadImage(file);
+            render();
+            renderInspector();
+          });
         }
         if (act === "remove-image") { const old = el.file; el.file = ""; if (old) delete imageCache[old]; render(); renderInspector(); }
       });
@@ -1767,25 +2414,13 @@
         b.classList.toggle("active", el.align === (a === "left" ? "left" : a === "center" ? "center" : "right"));
       }
     });
-  }
 
-  function replaceElementImage(el, file) {
-    const fd = new FormData();
-    fd.append("file", file);
-    fetch("/api/announcements/elements", {
-      method: "POST",
-      headers: { "X-CSRF-Token": csrfToken() },
-      body: fd,
-    })
-      .then((r) => r.json())
-      .then((data) => {
-        if (!data.file) throw new Error(data.error || "Upload fehlgeschlagen.");
-        el.file = data.file;
-        loadImage(data.file);
-        render();
-        renderInspector();
-      })
-      .catch((err) => { if (window.toast) window.toast(err.message, "error"); });
+    inspector.querySelectorAll(".ae-lang-tabs [data-el-lang]").forEach((b) => {
+      b.addEventListener("click", () => {
+        const l = b.dataset.elLang;
+        if (l !== editorLang) setEditorLang(l);
+      });
+    });
   }
 
   function refreshInspectorValues() {
@@ -1917,6 +2552,11 @@
    *  Wetterseiten-Inspector (Seite nach dem Bild)
    * ------------------------------------------------------------------ */
   const weatherInspector = document.getElementById("ae-weather-inspector");
+  function headingValue(lang) {
+    const h = project.weather && project.weather.heading;
+    if (h && typeof h === "object") return h[lang] || "";
+    return h || "";
+  }
   function renderWeatherInspector() {
     if (!weatherInspector) return;
     const w = project.weather || {};
@@ -1924,7 +2564,11 @@
       <p class="ae-hint">Optional erscheint nach diesem Ankündigungsbild eine eigene Wetterseite – im selben Design wie die große Wetter-Ansicht (nur heute).</p>
       ${checkRowHTML("ann-weather-enabled", "Wetter nach diesem Bild anzeigen", "weather.enabled")}
       ${inputRowHTML("ann-weather-location", "Standort", w.location || "")}
-      ${inputRowHTML("ann-weather-heading", "Eigene Überschrift (optional)", w.heading || "")}`;
+      <div class="ae-insp-sub">Überschrift (Sprache)</div>
+      <div class="ae-lang-tabs" id="ann-weather-heading-tabs">${EDITOR_LANGS.map((l) =>
+        `<button type="button" class="ae-lang-tab${l === editorLang ? " active" : ""}" data-el-lang="${l}">${l === "de" ? "🇩🇪" : "🇬🇧"} ${l.toUpperCase()}</button>`
+      ).join("")}</div>
+      ${inputRowHTML("ann-weather-heading", "Eigene Überschrift (optional)", headingValue(editorLang))}`;
     const linkText = (id, path) => {
       const el = document.getElementById(id);
       if (!el) return;
@@ -1934,7 +2578,11 @@
     const en = document.getElementById("ann-weather-enabled");
     if (en) { en.checked = w.enabled === true; en.addEventListener("change", () => { w.enabled = en.checked; }); }
     linkText("ann-weather-location", "weather.location");
-    linkText("ann-weather-heading", "weather.heading");
+    linkText("ann-weather-heading", "weather.heading." + editorLang);
+    const tabs = document.getElementById("ann-weather-heading-tabs");
+    if (tabs) tabs.querySelectorAll("[data-el-lang]").forEach((b) => {
+      b.addEventListener("click", () => { const l = b.dataset.elLang; if (l !== editorLang) setEditorLang(l); });
+    });
   }
   function inputRowHTML(id, label, value) {
     return `<div class="ae-field"><label>${esc(label)}</label><input type="text" id="${id}" maxlength="120" value="${esc(value)}"></div>`;
@@ -2231,6 +2879,12 @@
     const name = (document.getElementById("ann-name").value || "").trim() || "Mein Design";
     saveTemplate(name);
   });
+  const langSwitch = document.getElementById("ae-editor-lang-switch");
+  if (langSwitch) {
+    langSwitch.querySelectorAll("[data-editor-lang]").forEach((b) => {
+      b.addEventListener("click", () => { if (b.dataset.editorLang !== editorLang) setEditorLang(b.dataset.editorLang); });
+    });
+  }
   document.getElementById("ae-modal-close").addEventListener("click", () => modal.classList.add("hidden"));
   document.getElementById("ae-modal-backdrop").addEventListener("click", () => modal.classList.add("hidden"));
 
@@ -2280,12 +2934,30 @@
         project.background.file = null;
       }
       await waitForImages(6000);
-      render();
-      const blob = await new Promise((res) => canvas.toBlob(res, "image/png"));
-      if (!blob) throw new Error("Bild konnte nicht erzeugt werden.");
-
+      // Ein PNG je Sprache: `file` = Standardsprache (Deutsch), dazu
+      // `file_en` für die weitere Sprache. Das Display wählt automatisch.
+      project.languages = EDITOR_LANGS.slice();
+      project.defaultLanguage = DEFAULT_LANG;
       const fd = new FormData();
-      fd.append("file", blob, "announcement.png");
+      const savedLang = editorLang;
+      try {
+        for (const l of EDITOR_LANGS) {
+          editorLang = l;
+          exporting = true;
+          selectedId = null;
+          render();
+          exporting = false;
+          const blob = await new Promise((res) => canvas.toBlob(res, "image/png"));
+          if (!blob) throw new Error("Bild konnte nicht erzeugt werden.");
+          if (l === DEFAULT_LANG) fd.append("file", blob, "announcement.png");
+          else fd.append("file_" + l, blob, "announcement_" + l + ".png");
+        }
+      } finally {
+        exporting = false;
+        editorLang = savedLang;
+      }
+      render();
+
       fd.append("project", JSON.stringify(project));
       fd.append("name", project.name);
       if (bgFile) fd.append("background", bgFile);
