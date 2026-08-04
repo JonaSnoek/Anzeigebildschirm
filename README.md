@@ -65,6 +65,17 @@ Wiedergabe und Benutzer über ein dunkles, modernes Dashboard.
   ist – die großen Ansichten werden allein über „… zwischen den Medien
   zeigen“ gesteuert, der Widget-Schalter reguliert nur das kleine Overlay
   während der Medien
+- **Ankündigungsbilder** (eigene Bild-Designs im Editor erstellt): werden als
+  ganz normale Bilder in der Diashow wiedergegeben (Playlist, Duplizieren,
+  Umbenennen, Löschen, mehrfach, zeitgesteuert) – auf dem Display erscheint
+  nur das fertig gerenderte PNG, keine Bearbeitungsebenen
+- **Eigene Wetterseite pro Ankündigungsbild**: optional direkt nach dem Bild
+  – gleiche Optik wie die große Wetter-Ansicht, aber mit frei wählbarer
+  Überschrift und eigenem Standort; gezeigt werden nur die Daten des
+  aktuellen Tages (Zustand, Höchst-/Tiefsttemperatur, „Regen/Kein Regen“
+  und Regenwahrscheinlichkeit, Tagesverlauf Morgen/Mittag/Abend) – die
+  Daten werden automatisch aktualisiert und bei fehlendem Internet aus dem
+  Cache weitergezeigt
 - **Explizites Speichern**: Alle Wiedergabe-Änderungen (Diashow, Uhr, Wetter,
   Positionen, Größen, Anzeigedauer) werden erst über den gut sichtbaren
   Button **„Einstellungen speichern“** übernommen und dann per SSE sofort an
@@ -98,7 +109,20 @@ Wiedergabe und Benutzer über ein dunkles, modernes Dashboard.
   freier Speicherplatz, letzte Uploads, **Live-Vorschau** der aktuellen
   Anzeige (Uhr/Wetter/aktive Medien als eingebetteter Bildschirm)
 - **Medienverwaltung:** Hochladen, Löschen, Ersetzen, Umbenennen, Sortieren
-  (Drag & Drop + Pfeiltasten), Vorschau, **Ein/Aus-Schalter pro Datei**
+  (Drag & Drop + Pfeiltasten), Vorschau, **Ein/Aus-Schalter pro Datei**,
+  **Duplizieren** – plus **„+ Ankündigungsbild erstellen“** (öffnet den
+  Editor) und einem **Bearbeiten-Button** an jedem Ankündigungsbild
+- **Ankündigungsbild-Editor:** Canvas-basierter Editor für Ankündigungsbilder
+  (1920 × 1080) mit Hintergrundbild (Upload/Austausch/Verschieben/Zoom/
+  Zuschneiden + Abdunkeln), Titel mit geschwungener Linie, mehrzeiligem
+  Untertitel und weißem Info-Feld (Kalender-/Standort-Icon, unten links).
+  Inhalte lassen sich per Drag & Drop verschieben (mit Hilfslinien und
+  Raster/Einrasten), Regler für Größen, Abstände und Farben; die Ebenen
+  sind fest vorgegeben – bearbeitbar sind nur die Inhalte. Die Vorschau
+  rendert live auf dem Canvas; beim **Speichern** entsteht das fertige
+  PNG als normales Bildmedium plus eine editierbare Projektdatei. Optional
+  lässt sich hier die **eigene Wetterseite** (Standort, Schalter, freie
+  Überschrift) hinterlegen.
 - **Wiedergabe-Einstellungen:** Anzeigedauer, Übergang, Autoplay, Loop,
   Lautstärke, Hintergrundmusik, **Widgets** (Uhr und Wetter: aktiv,
   **zwei getrennte Größen** per Schieberegler bis 600 % – klein bei Medien,
@@ -141,14 +165,16 @@ Wiedergabe und Benutzer über ein dunkles, modernes Dashboard.
 anzeige/
 ├── backend/                    # Flask-Backend
 │   ├── routes/                 #   URL-Routen (modular, je ein Bereich)
-│   │   ├── public.py           #     Anzeigebildschirm, /api/display, SSE, Medien
+│   │   ├── public.py             #     Anzeigebildschirm, /api/display, SSE, Medien
 │   │   ├── auth.py             #     Login / Logout
 │   │   ├── dashboard.py        #     Übersicht
-│   │   ├── media.py            #     Medienverwaltung
+│   │   ├── media.py            #     Medienverwaltung (+ Duplizieren, Ankündigungs-Löschung)
 │   │   ├── settings.py         #     Wiedergabe-Einstellungen
 │   │   ├── weather.py          #     Wetterdaten (öffentlich + Admin)
+│   │   ├── announcements.py    #     Ankündigungsbild-Editor (Seiten + API)
 │   │   └── users.py            #     Benutzerverwaltung
 │   ├── services/               #   Geschäftslogik (Media, Settings, Weather, Display)
+│   │   ├── announcements.py    #     Projekt-/Hintergrunddateien, Duplizieren
 │   │   └── display.py          #     Zentrale Timeline + Anzeige-Zustand
 │   ├── events.py               #   SSE-Pub/Sub-Hub + notify_display()
 │   ├── __init__.py             #   App-Factory
@@ -168,7 +194,8 @@ anzeige/
 ├── uploads/                    # Hochgeladene Medien
 │   ├── images/
 │   ├── videos/
-│   └── audio/
+│   ├── audio/
+│   └── announcements/          # Projektdateien + Hintergrundbilder der Ankündigungsbilder
 ├── database/                   # SQLite-Datenbankdatei
 ├── scripts/
 │   └── create_admin.py         # Benutzer/Konto-Verwaltung (CLI)
@@ -459,6 +486,13 @@ cd /home/ubuntu/anzeige
 | POST    | `/api/media/<id>/active`               | admin/editor         | Medium ein-/ausblenden       |
 | POST    | `/api/media/reorder`                   | admin/editor         | Reihenfolge speichern        |
 | GET/POST| `/api/settings`                        | admin/editor         | Einstellungen lesen/speichern|
+| GET     | `/admin/announcements/new`                | admin/editor         | Editor: neues Ankündigungsbild |
+| GET     | `/admin/announcements/<id>/edit`          | admin/editor         | Editor: Ankündigungsbild bearbeiten |
+| POST    | `/api/announcements`                      | admin/editor         | Ankündigungsbild anlegen (multipart: PNG + Projekt-JSON + ggf. Hintergrund) |
+| POST    | `/api/announcements/<id>`                 | admin/editor         | Ankündigungsbild speichern  |
+| GET     | `/api/announcements/<id>`                 | admin/editor         | Projektdatei eines Ankündigungsbildes |
+| GET     | `/api/announcements/bg/<datei>`           | admin/editor         | Hintergrundbild des Editors |
+| POST    | `/api/media/<id>/duplicate`               | admin/editor         | Medium (inkl. Ankündigungsbild) duplizieren |
 | POST    | `/api/weather/refresh`                 | admin/editor         | Wetter von Open-Meteo holen  |
 | POST    | `/api/weather`                         | admin/editor         | Wetter manuell speichern     |
 | GET     | `/api/users`                           | admin                | Benutzerliste                |

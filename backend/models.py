@@ -76,6 +76,10 @@ class Media(db.Model):
     sort_order = db.Column(Integer, nullable=False, default=0, index=True)
     active = db.Column(Boolean, nullable=False, default=True, index=True)
     created_at = db.Column(DateTime, nullable=False, default=_utcnow)
+    # Ankündigungsbilder: Dateiname der editierbaren Projektdatei (JSON unter
+    # uploads/announcements/). Ist sie gesetzt, ist das Bild ein im Editor
+    # erstelltes Ankündigungsbild und kann jederzeit wieder geöffnet werden.
+    project_file = db.Column(String(200), nullable=True)
 
     def to_dict(self) -> dict:
         """Serielles Format für die API."""
@@ -89,6 +93,7 @@ class Media(db.Model):
             "duration": self.duration or 0.0,
             "sort_order": self.sort_order,
             "active": self.active,
+            "project_file": self.project_file,
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }
 
@@ -177,3 +182,57 @@ class WeatherData(db.Model):
             "today": _day("today"),
             "tomorrow": _day("tomorrow"),
         }
+
+
+class LocationWeather(db.Model):
+    """
+    Pro-Standort-Wetterdaten für Ankündigungsbilder (eine Zeile je Ort).
+
+    Im Gegensatz zum globalen Wetter-Widget (eine einzige Zeile) hält diese
+    Tabelle für jeden im Editor hinterlegten Standort eigene Daten vor. Es
+    werden ausschließlich Werte des aktuellen Tages gespeichert, denn die
+    Wetterseite hinter einem Ankündigungsbild zeigt nur „heute“.
+    """
+
+    __tablename__ = "location_weather"
+
+    location = db.Column(String(120), primary_key=True)
+    updated_at = db.Column(DateTime, nullable=False, default=_utcnow)
+
+    today_temp = db.Column(String(16), nullable=False, default="")
+    today_temp_max = db.Column(String(16), nullable=False, default="")
+    today_temp_min = db.Column(String(16), nullable=False, default="")
+    today_desc = db.Column(String(120), nullable=False, default="")
+    today_icon = db.Column(String(32), nullable=False, default="")
+    today_course = db.Column(Text, nullable=False, default="")
+    today_rain = db.Column(Boolean, nullable=False, default=False)
+    today_rain_prob = db.Column(Integer, nullable=False, default=0)
+
+    def to_dict(self) -> dict:
+        """Serielles Format für die API (nur der aktuelle Tag)."""
+        temp = self.today_temp
+        return {
+            "location": self.location,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+            "today": {
+                "temp": temp,
+                "temp_max": self.today_temp_max or temp,
+                "temp_min": self.today_temp_min or "",
+                "desc": self.today_desc,
+                "icon": self.today_icon,
+                "state": self.today_icon,
+                "course": self._course(),
+                "rain": bool(self.today_rain),
+                "rain_prob": self.today_rain_prob or 0,
+            },
+        }
+
+    def _course(self) -> list:
+        raw = self.today_course
+        if not raw:
+            return []
+        try:
+            value = json.loads(raw)
+            return value if isinstance(value, list) else []
+        except (TypeError, ValueError):
+            return []

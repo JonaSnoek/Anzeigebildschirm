@@ -20,6 +20,10 @@ uploads/audio/*
 !uploads/videos/.gitkeep
 !uploads/audio/.gitkeep
 
+# Ankündigungsbilder: Projektdateien + Hintergründe (nur .gitkeep behalten)
+uploads/announcements/*
+!uploads/announcements/.gitkeep
+
 # Logs & Betriebssystem
 *.log
 .DS_Store

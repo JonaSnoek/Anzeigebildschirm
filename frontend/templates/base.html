@@ -15,6 +15,7 @@
   <title>{% block title %}{{ site_name }}{% endblock %}</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/widgets.css') }}">
+  {% block extra_head %}{% endblock %}
   <link rel="icon" href="data:,">
 </head>
 <body>

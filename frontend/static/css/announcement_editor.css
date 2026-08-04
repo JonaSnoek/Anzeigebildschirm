@@ -1,0 +1,96 @@
+/*
+ * Digital Signage – Editor für Ankündigungsbilder.
+ */
+
+.announcement-layout {
+  display: grid;
+  grid-template-columns: minmax(320px, 420px) 1fr;
+  gap: 1.5rem;
+  align-items: start;
+}
+
+.announcement-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+  max-height: calc(100vh - 7rem);
+  overflow-y: auto;
+  padding-right: .2rem;
+}
+
+.announcement-preview {
+  position: sticky;
+  top: 1.5rem;
+}
+
+.ann-canvas-wrap {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  background: #0b0e14;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  touch-action: none;
+}
+
+#ann-canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  cursor: crosshair;
+}
+
+.ann-layers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .4rem;
+  margin: .3rem 0 .5rem;
+}
+
+.ann-layers span {
+  font-size: .78rem;
+  color: var(--muted);
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: .25rem .7rem;
+}
+
+.ann-layers span.active {
+  color: #04121c;
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+#ann-snap-enabled.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #04121c;
+}
+
+#ann-selected-layer {
+  margin-left: auto;
+}
+
+#ann-subtitle-text,
+#ann-weather-heading {
+  font-family: inherit;
+  resize: vertical;
+}
+
+.announcement-controls .card h2 {
+  margin-top: 0;
+}
+
+@media (max-width: 1100px) {
+  .announcement-layout {
+    grid-template-columns: 1fr;
+  }
+  .announcement-preview {
+    position: static;
+  }
+  .announcement-controls {
+    max-height: none;
+    overflow-y: visible;
+  }
+}

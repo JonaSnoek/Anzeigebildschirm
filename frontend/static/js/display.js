@@ -39,12 +39,14 @@
     audio: [],
     weather: null,
     timeline: null,
+    announcement_weather: {},
   };
 
   // Serverzeit - lokale Zeit (Sekunden), wird bei jedem Event korrigiert.
   let skew = 0;
 
-  let currentKey = null;   // "idle" | "weather-screen" | "image:<id>" | "video:<id>"
+  let currentKey = null;   // "idle" | "weather-screen" | "weather-announcement:<id>" | "image:<id>" | "video:<id>"
+  let currentAnnouncementId = null;
   let currentLayer = LAYER_A;
   let currentAudioUrl = null;
   let source = null;
@@ -137,12 +139,14 @@
   }
 
   /* ---------- Wetter ---------- */
-  // Drei Zustände: groß (eigener Wetter-Slot, bildschirmfüllend), als Widget
-  // (während der Medien, frei positionierbar) oder ausgeblendet (Leerzustand).
+  // Drei Zustände: groß (eigener Wetter-Slot oder Wetterseite eines
+  // Ankündigungsbildes, bildschirmfüllend), als Widget (während der Medien,
+  // frei positionierbar) oder ausgeblendet (Leerzustand).
   function applyWeather() {
     const c = cfg();
-    const bigWeather = currentKey === "weather-screen";
-    const media = currentKey !== "idle" && currentKey !== "weather-screen";
+    const isAnnouncement = currentKey && currentKey.indexOf("weather-announcement:") === 0;
+    const bigWeather = currentKey === "weather-screen" || isAnnouncement;
+    const media = currentKey !== "idle" && !bigWeather;
 
     if (bigWeather) {
       WEATHER.className = "widget-weather weather-screen";
@@ -168,6 +172,16 @@
       return;
     }
 
+    // Datenquelle: bei einem Ankündigungsbild die Wetterseite dieses Bildes
+    // (eigener Standort, nur „heute“), sonst das globale Wetter-Widget.
+    let data = state.weather;
+    let opts = {};
+    if (isAnnouncement) {
+      const entry = (state.announcement_weather || {})[currentAnnouncementId];
+      data = entry ? entry.weather : null;
+      opts = { heading: (entry && entry.heading) || "", todayOnly: true };
+    }
+
     // Das kleine Widget hängt am Widget-Schalter; die große Zwischenansicht
     // erscheint unabhängig davon (nur echte Daten vorausgesetzt).
     if (!bigWeather && !c.weatherEnabled) {
@@ -175,7 +189,7 @@
       WEATHER.innerHTML = "";
       return;
     }
-    if (!state.weather || !state.weather.location) {
+    if (!data || !data.location) {
       WEATHER.classList.add("hidden");
       WEATHER.innerHTML = "";
       return;
@@ -183,7 +197,7 @@
     WEATHER.classList.remove("hidden");
     // Große Wetter-Ansicht zeigt immer die volle Darstellung (inkl. Tagesverlauf).
     const display = bigWeather ? "large" : c.weatherDisplay;
-    WEATHER.innerHTML = Signage.weatherMarkup(state.weather, display, lang);
+    WEATHER.innerHTML = Signage.weatherMarkup(data, display, lang, opts);
   }
 
   /* ---------- Zentrale Timeline ---------- */
@@ -296,6 +310,20 @@
   function showWeather() {
     if (currentKey === "weather-screen") return;
     currentKey = "weather-screen";
+    currentAnnouncementId = null;
+    stopPlayer();
+    PLAYER.classList.add("hidden");
+    applyClock();
+    applyWeather();
+  }
+
+  // Wetterseite eines Ankündigungsbildes: gleiches Design wie die große
+  // Wetter-Ansicht, aber mit Überschrift und Wetter des Bild-Standorts.
+  function showAnnouncementWeather(slot) {
+    const key = "weather-announcement:" + slot.id;
+    if (key === currentKey) return;
+    currentKey = key;
+    currentAnnouncementId = slot.id;
     stopPlayer();
     PLAYER.classList.add("hidden");
     applyClock();
@@ -309,6 +337,10 @@
     }
     if (slot.type === "weather") {
       showWeather();
+      return;
+    }
+    if (slot.type === "weather-announcement") {
+      showAnnouncementWeather(slot);
       return;
     }
     const key = slot.type + ":" + slot.id;
@@ -358,6 +390,7 @@
     state.audio = data.audio || [];
     state.weather = data.weather || null;
     state.timeline = data.timeline || null;
+    state.announcement_weather = data.announcement_weather || {};
     applyClock();
     applyWeather();
     updateAudio();

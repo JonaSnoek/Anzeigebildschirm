@@ -24,6 +24,7 @@ def _ensure_directories() -> None:
         BASE_DIR / "uploads" / "images",
         BASE_DIR / "uploads" / "videos",
         BASE_DIR / "uploads" / "audio",
+        BASE_DIR / "uploads" / "announcements",
     )
     for folder in folders:
         folder.mkdir(parents=True, exist_ok=True)
@@ -60,6 +61,11 @@ def _migrate_schema() -> None:
     if "duration" not in columns:
         db.session.execute(
             db.text("ALTER TABLE media ADD COLUMN duration FLOAT NOT NULL DEFAULT 0")
+        )
+        db.session.commit()
+    if "project_file" not in columns:
+        db.session.execute(
+            db.text("ALTER TABLE media ADD COLUMN project_file VARCHAR(200)")
         )
         db.session.commit()
 
@@ -126,7 +132,16 @@ def create_app(config_class=Config) -> Flask:
     app.before_request(validate_csrf)
 
     # Modulare Blueprints registrieren
-    from .routes import auth, dashboard, media, public, settings, users, weather
+    from .routes import (
+        announcements,
+        auth,
+        dashboard,
+        media,
+        public,
+        settings,
+        users,
+        weather,
+    )
 
     app.register_blueprint(public.bp)
     app.register_blueprint(auth.bp)
@@ -135,6 +150,7 @@ def create_app(config_class=Config) -> Flask:
     app.register_blueprint(settings.bp)
     app.register_blueprint(users.bp)
     app.register_blueprint(weather.bp)
+    app.register_blueprint(announcements.bp)
 
     @app.context_processor
     def _inject_globals() -> dict:

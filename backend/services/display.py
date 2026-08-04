@@ -23,6 +23,7 @@ from sqlalchemy import select
 from ..database import db
 from ..models import Media
 from ..services import weather as weather_svc
+from ..services.announcements import load_project
 from ..services.settings import get_all_settings
 
 # Fallback-Dauer für Videos, deren echte Länge noch nicht bekannt ist.
@@ -33,6 +34,28 @@ DEFAULT_VIDEO_DURATION = 15.0
 # Cache für die Zyklus-Referenz (cycle_start) – wird nur neu gesetzt, wenn
 # sich die Signatur (Playlist/Einstellungen) ändert.
 _cache: dict = {"signature": None, "cycle_start": 0.0}
+
+
+def _announcement_configs(items) -> dict:
+    """
+    Liefert je Ankündigungsbild dessen Wetter-Konfiguration (aus der
+    Projektdatei). Nur Bilder mit aktiviertem Wetter und Standort zählen.
+    """
+    out: dict = {}
+    for m in items:
+        if m.type != "image" or not m.project_file:
+            continue
+        project = load_project(m) or {}
+        w = project.get("weather") or {}
+        location = (w.get("location") or "").strip()
+        if not w.get("enabled") or not location:
+            continue
+        out[m.id] = {
+            "enabled": True,
+            "location": location,
+            "heading": (w.get("heading") or "").strip(),
+        }
+    return out
 
 
 def _playlist():
@@ -52,11 +75,16 @@ def _item_duration(item: Media, slide_duration: int) -> float:
     return float(slide_duration)
 
 
-def _timeline_slots(items, settings: dict):
+def _timeline_slots(items, settings: dict, aw_configs: dict = None):
     """
-    Baut die geordnete Element-Liste (Bilder/Videos + optional Uhr-Ansichten
-    zwischen den Medien) mit Start-/Endzeitpunkt innerhalb des Zyklus.
+    Baut die geordnete Element-Liste (Bilder/Videos + optionale Wetterseiten)
+    mit Start-/Endzeitpunkt innerhalb des Zyklus.
+
+    Zusätzlich zu den globalen Uhr-/Wetter-Zwischenansichten kann jedes
+    Ankündigungsbild eine eigene Wetterseite direkt nach sich nach sich
+    ziehen (weather-announcement-Slot, Konfiguration aus der Projektdatei).
     """
+    aw_configs = aw_configs if aw_configs is not None else _announcement_configs(items)
     slide = int(settings.get("slide_duration", "8") or 8)
     loop = settings.get("loop", "true") != "false"
     # Zwischenansichten sind unabhängig vom Widget-Schalter: Die große Ansicht
@@ -76,6 +104,22 @@ def _timeline_slots(items, settings: dict):
                         "duration": float(slide)})
         return out
 
+    def announcement_weather_slot(item):
+        """Eigene Wetterseite eines Ankündigungsbildes (oder None)."""
+        config = aw_configs.get(item.id)
+        if not config:
+            return None
+        heading = config.get("heading") or ""
+        return {
+            "type": "weather-announcement",
+            "id": item.id,
+            "name": heading or item.name,
+            "url": "",
+            "duration": float(slide),
+            "location": config["location"],
+            "heading": heading,
+        }
+
     slots = []
     for item in items:
         slots.append({
@@ -85,6 +129,10 @@ def _timeline_slots(items, settings: dict):
             "url": f"/media/{item.type}/{item.stored_name}",
             "duration": _item_duration(item, slide),
         })
+        # Direkt nach dem Ankündigungsbild dessen eigene Wetterseite einfügen.
+        aw = announcement_weather_slot(item)
+        if aw:
+            slots.append(aw)
         if (clock_on or weather_on) and len(items) > 1:
             slots.extend(interstitial_slots())
 
@@ -92,7 +140,8 @@ def _timeline_slots(items, settings: dict):
     if (clock_on or weather_on) and len(items) == 1 and loop:
         slots.extend(interstitial_slots())
 
-    # Ohne Loop endet der Zyklus sauber beim letzten Medium.
+    # Ohne Loop endet der Zyklus sauber beim letzten Medium. Die Wetterseite
+    # eines Ankündigungsbildes gehört zum Bild und wird NICHT entfernt.
     if not loop:
         while slots and slots[-1]["type"] in ("clock", "weather"):
             slots.pop()
@@ -106,13 +155,19 @@ def _timeline_slots(items, settings: dict):
     return slots
 
 
-def _signature(items, settings: dict) -> str:
+def _signature(items, settings: dict, aw_configs: dict = None) -> str:
     """Fingerabdruck der Playlist – ändert sich bei jeder Inhaltsänderung."""
+    aw_configs = aw_configs if aw_configs is not None else _announcement_configs(items)
     playlist = ",".join(
         f"{m.id}:{m.duration or 0}:{m.sort_order}:{m.active}" for m in items
     )
+    announce = ",".join(
+        f"{m_id}:{cfg.get('enabled')}:{cfg.get('location')}:{cfg.get('heading')}"
+        for m_id, cfg in aw_configs.items()
+    )
     return "|".join([
         playlist,
+        announce,
         str(settings.get("slide_duration", "8")),
         str(settings.get("loop", "true")),
         str(settings.get("clock_interstitial", "false")),
@@ -124,12 +179,13 @@ def build_timeline(items, settings: dict) -> dict | None:
     """Berechnet die zentrale Timeline (oder None bei leerer Playlist)."""
     if not items:
         return None
-    slots = _timeline_slots(items, settings)
+    aw_configs = _announcement_configs(items)
+    slots = _timeline_slots(items, settings, aw_configs)
     if not slots:
         return None
 
     cycle_duration = slots[-1]["end"]
-    sig = _signature(items, settings)
+    sig = _signature(items, settings, aw_configs)
     if _cache.get("signature") != sig:
         _cache["signature"] = sig
         _cache["cycle_start"] = time.time()
@@ -141,6 +197,49 @@ def build_timeline(items, settings: dict) -> dict | None:
         "loop": settings.get("loop", "true") != "false",
         "items": slots,
     }
+
+
+def build_announcement_weather(items) -> dict:
+    """
+    Liefert die Wetterdaten je Ankündigungsbild (id -> {location, heading,
+    weather}) für die Anzeige. Nutzt den Cache ohne Netzwerkzugriff, damit
+    Echtzeit-Broadcasts nie durch einen langsamen Wetter-Abruf verzögert werden.
+    """
+    out: dict = {}
+    configs = _announcement_configs(items)
+    for m in items:
+        config = configs.get(m.id)
+        if not config:
+            continue
+        out[m.id] = {
+            "location": config["location"],
+            "heading": config["heading"],
+            "weather": weather_svc.get_location_weather_snapshot(config["location"]),
+        }
+    return out
+
+
+def refresh_announcement_weather() -> None:
+    """
+    Aktualisiert veraltete Standort-Wetterdaten aller Ankündigungsbilder.
+    Wird beim Laden der Anzeige-API aufgerufen (nur wenn veraltet; Fallback
+    auf den Cache bei Netzwerkfehlern).
+    """
+    rows = db.session.execute(
+        select(Media)
+        .where(Media.active.is_(True))
+        .order_by(Media.sort_order.asc(), Media.id.asc())
+    ).scalars().all()
+    items = [m for m in rows if m.type in ("image", "video")]
+    configs = _announcement_configs(items)
+    for m in items:
+        config = configs.get(m.id)
+        if not config:
+            continue
+        try:
+            weather_svc.get_location_weather(config["location"])
+        except Exception:  # noqa: BLE001 – Netzwerkfehler ignorieren (Cache fällt zurück)
+            pass
 
 
 def build_state() -> dict:
@@ -160,5 +259,6 @@ def build_state() -> dict:
         "media": [m.to_dict() for m in items],
         "audio": audio,
         "weather": weather_svc.get_weather_snapshot(settings.get("weather_city", "")),
+        "announcement_weather": build_announcement_weather(items),
         "timeline": build_timeline(items, settings),
     }

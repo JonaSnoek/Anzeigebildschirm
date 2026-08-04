@@ -118,6 +118,8 @@ if (mediaPage) {
     replace: '<svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 0115.5-6.4L21 8M21 12a9 9 0 01-15.5 6.4L3 16M21 8h-4M3 16h4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     delete: '<svg viewBox="0 0 24 24"><path d="M3 6h18M8 6V4a1 1 0 011-1h6a1 1 0 011 1v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6h14zM10 11v6M14 11v6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     eye: '<svg viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7zM12 15a3 3 0 100-6 3 3 0 000 6z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    edit: '<svg viewBox="0 0 24 24"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4L16.5 3.5z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    duplicate: '<svg viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 15V5a2 2 0 012-2h10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   };
 
   async function loadList() {
@@ -167,6 +169,8 @@ if (mediaPage) {
           ${i > 0 ? actionButton("up", "Nach oben", SVG.up) : ""}
           ${i < items.length - 1 ? actionButton("down", "Nach unten", SVG.down) : ""}
           ${actionButton("preview", "Vorschau", SVG.eye)}
+          ${m.project_file ? actionButton("edit", "Ankündigungsbild bearbeiten", SVG.edit) : ""}
+          ${actionButton("duplicate", "Duplizieren", SVG.duplicate)}
           ${actionButton("rename", "Umbenennen", SVG.rename)}
           ${actionButton("replace", "Ersetzen", SVG.replace)}
           ${actionButton("delete", "Löschen", SVG.delete)}
@@ -232,6 +236,12 @@ if (mediaPage) {
               ? `<video src="${item.url}" controls autoplay></video>`
               : `<audio src="${item.url}" controls autoplay></audio>`;
           openModal(inner);
+        } else if (action === "edit") {
+          window.location.href = `/admin/announcements/${id}/edit`;
+        } else if (action === "duplicate") {
+          const data = await api(`/api/media/${id}/duplicate`, { method: "POST" });
+          toast(`Dupliziert: ${data.item ? data.item.name : "Kopie"}`, "ok");
+          loadList();
         } else if (action === "rename") {
           const name = prompt("Neuer Name:", item.name);
           if (name && name.trim()) {
@@ -440,12 +450,14 @@ if (settingsForm) {
   // Darstellungszustand der Vorschau – exakt wie auf dem echten Display:
   //   "empty"   → große Uhr (Ohne-Medien-Modus oder Uhr-Interstitial-Slot)
   //   "weather" → große Wetter-Ansicht (Wetter-Interstitial-Slot)
+  //   "weather-announcement" → Wetterseite eines Ankündigungsbildes
   //   "media"   → Medien mit kleinen Widgets
   function previewMode() {
     if (previewContext.value === "empty") return "empty";
     if (previewContext.value === "media") {
       if (liveSlotState && liveSlotState.type === "clock") return "empty";
       if (liveSlotState && liveSlotState.type === "weather") return "weather";
+      if (liveSlotState && liveSlotState.type === "weather-announcement") return "weather-announcement";
       return "media";
     }
     return "media";
@@ -494,13 +506,25 @@ if (settingsForm) {
     const display = ["small", "medium", "large"].indexOf(settingsForm.weather_display.value) >= 0
       ? settingsForm.weather_display.value
       : "large";
-    if (mode === "weather") {
+    if (mode === "weather" || mode === "weather-announcement") {
       previewWeather.style.setProperty("--widget-scale", weather.bigSizePct / 100);
       previewWeather.className = "widget-weather embedded weather-screen";
       previewWeather.style.left = "";
       previewWeather.style.top = "";
-      previewWeather.classList.remove("hidden");
-      previewWeather.innerHTML = Signage.weatherMarkup(weatherPreviewData(), "large", lang);
+      let data = weatherPreviewData();
+      let opts = {};
+      if (mode === "weather-announcement") {
+        const entry = (liveState.announcement_weather || {})[liveSlotState.id];
+        data = entry ? entry.weather : null;
+        opts = { heading: (entry && entry.heading) || "", todayOnly: true };
+      }
+      if (data && data.location) {
+        previewWeather.classList.remove("hidden");
+        previewWeather.innerHTML = Signage.weatherMarkup(data, "large", lang, opts);
+      } else {
+        previewWeather.classList.add("hidden");
+        previewWeather.innerHTML = "";
+      }
     } else if (mode === "media") {
       previewWeather.style.setProperty("--widget-scale", weather.sizePct / 100);
       previewWeather.className = "widget-weather embedded weather-" + display + " weather-" + weather.mode;
@@ -526,7 +550,7 @@ if (settingsForm) {
   }
 
   /* ---------- Live-Medien (SSE, identisch mit Display) ---------- */
-  const liveState = { timeline: null };
+  const liveState = { timeline: null, announcement_weather: null };
   let liveSkew = 0;
   let liveMediaKey = null;
   let liveSlotState = null;
@@ -586,6 +610,7 @@ if (settingsForm) {
       const message = JSON.parse(event.data);
       if (typeof message.ts === "number") liveSkew = message.ts - Date.now() / 1000;
       if (message.data && message.data.timeline) liveState.timeline = message.data.timeline;
+      if (message.data && message.data.announcement_weather) liveState.announcement_weather = message.data.announcement_weather;
       renderPreview();
     } catch (err) {}
   });
@@ -596,6 +621,7 @@ if (settingsForm) {
     .then((data) => {
       if (typeof data.server_time === "number") liveSkew = data.server_time - Date.now() / 1000;
       if (data && data.timeline) liveState.timeline = data.timeline;
+      if (data && data.announcement_weather) liveState.announcement_weather = data.announcement_weather;
       renderPreview();
     })
     .catch(function () {});

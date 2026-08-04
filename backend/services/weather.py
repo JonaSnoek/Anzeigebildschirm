@@ -20,7 +20,7 @@ from sqlalchemy import select
 
 from ..config import Config
 from ..database import db
-from ..models import WeatherData
+from ..models import LocationWeather, WeatherData
 
 OPEN_METEO_GEO = "https://geocoding-api.open-meteo.com/v1/search"
 OPEN_METEO_FORECAST = "https://api.open-meteo.com/v1/forecast"
@@ -62,6 +62,13 @@ WMO = {
 }
 
 
+# WMO-Codes mit Niederschlag (Regen/Schnee/Gewitter) → „Regen oder kein Regen“
+RAIN_CODES = {
+    51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 71, 73, 75, 77,
+    80, 81, 82, 85, 86, 95, 96, 99,
+}
+
+
 def _http_get_json(url: str, params: dict):
     """Kleiner HTTP-GET-Client (urllib, ohne Extra-Abhängigkeiten)."""
     query = urllib.parse.urlencode(params)
@@ -75,6 +82,30 @@ def _describe(code) -> tuple[str, str]:
         return WMO.get(int(code), ("Unbekannt", "cloud"))
     except (TypeError, ValueError):
         return ("Unbekannt", "cloud")
+
+
+def _is_rain(code) -> bool:
+    """True, wenn der WMO-Code Niederschlag bedeutet."""
+    try:
+        return int(code) in RAIN_CODES
+    except (TypeError, ValueError):
+        return False
+
+
+def _max_rain_prob(hourly: dict, day: str) -> int:
+    """Maximale Regenwahrscheinlichkeit (0–100 %) für einen Tag."""
+    if not day or not hourly:
+        return 0
+    times = hourly.get("time") or []
+    probs = hourly.get("precipitation_probability") or []
+    best = 0
+    for i, ts in enumerate(times):
+        if ts.startswith(day) and i < len(probs):
+            try:
+                best = max(best, int(probs[i]))
+            except (TypeError, ValueError):
+                continue
+    return best
 
 
 def _geocode(city: str):
@@ -96,7 +127,7 @@ def _fetch(city: str) -> dict:
             "latitude": lat,
             "longitude": lon,
             "current": "temperature_2m,weather_code",
-            "hourly": "temperature_2m,weather_code",
+            "hourly": "temperature_2m,weather_code,precipitation_probability",
             "daily": "weather_code,temperature_2m_max,temperature_2m_min",
             "timezone": "auto",
             "forecast_days": 2,
@@ -168,6 +199,8 @@ def _fetch(city: str) -> dict:
             "desc": today_desc,
             "state": today_state,
             "course": _course(today_date),
+            "rain": _is_rain(current.get("weather_code")),
+            "rain_prob": _max_rain_prob(hourly, today_date),
         },
         "tomorrow": {
             "temp": tomorrow_max or "",
@@ -315,3 +348,85 @@ def save_manual(data: dict) -> dict:
         "tomorrow": tomorrow,
     }
     return _store(payload).to_dict()
+
+
+# ---------------------------------------------------------------------------
+# Wetter pro Standort (Ankündigungsbilder)
+# ---------------------------------------------------------------------------
+
+def _location_row(location: str) -> LocationWeather | None:
+    return db.session.get(LocationWeather, (location or "").strip()[:120])
+
+
+def _store_location(location: str, data: dict) -> LocationWeather:
+    """Schreibt Wetterdaten eines Standorts (nur der aktuelle Tag)."""
+    row = _location_row(location)
+    if row is None:
+        row = LocationWeather(location=(location or "").strip()[:120])
+        db.session.add(row)
+
+    today = data.get("today") or {}
+    row.updated_at = datetime.now(timezone.utc)
+    row.today_temp = str(today.get("temp") or today.get("temp_max") or "")[:16]
+    row.today_temp_max = str(today.get("temp_max") or "")[:16]
+    row.today_temp_min = str(today.get("temp_min") or "")[:16]
+    row.today_desc = str(today.get("desc") or "")[:120]
+    row.today_icon = (today.get("state") or today.get("icon") or "")[:32]
+    row.today_rain = bool(today.get("rain"))
+    try:
+        row.today_rain_prob = max(0, min(100, int(today.get("rain_prob") or 0)))
+    except (TypeError, ValueError):
+        row.today_rain_prob = 0
+    course = today.get("course")
+    if course is not None:
+        row.today_course = json.dumps(course, ensure_ascii=False)
+    db.session.commit()
+    return row
+
+
+def _empty_location(location: str = "") -> dict:
+    """Leere Standort-Wetterdaten (kein Ort/keine Daten verfügbar)."""
+    return {
+        "location": location,
+        "updated_at": None,
+        "today": {
+            "temp": "",
+            "temp_max": "",
+            "temp_min": "",
+            "desc": "Keine Daten",
+            "icon": "cloud",
+            "course": [],
+            "rain": False,
+            "rain_prob": 0,
+        },
+    }
+
+
+def get_location_weather(location: str = "", force: bool = False) -> dict:
+    """
+    Liefert Wetterdaten für einen Standort (heute), aktualisiert automatisch,
+    wenn sie fehlen oder veraltet sind. Fallback auf den letzten Cache bei
+    Netzwerkfehlern.
+    """
+    location = (location or "").strip()[:120]
+    if not location:
+        return _empty_location(location)
+    row = _location_row(location)
+    if force or row is None or _is_stale(row):
+        try:
+            return _store_location(location, _fetch(location)).to_dict()
+        except Exception:
+            # Kein Internet/API-Fehler: zuletzt gespeicherte Werte verwenden
+            pass
+    if row is not None:
+        return row.to_dict()
+    return _empty_location(location)
+
+
+def get_location_weather_snapshot(location: str = "") -> dict:
+    """Wie get_location_weather, aber OHNE Netzwerkzugriff (für Broadcasts)."""
+    location = (location or "").strip()[:120]
+    row = _location_row(location)
+    if row is not None:
+        return row.to_dict()
+    return _empty_location(location)

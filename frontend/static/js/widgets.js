@@ -47,7 +47,7 @@ window.Signage = (function () {
     { id: "fog", label: "Nebel" },
   ];
 
-  const I18N = {
+    const I18N = {
     de: {
       today: "Heute",
       tomorrow: "Morgen",
@@ -63,6 +63,9 @@ window.Signage = (function () {
       showers: "Regenschauer",
       storm: "Gewitter",
       snow: "Schnee",
+      "rain-yes": "Regen",
+      "rain-no": "Kein Regen",
+      "rain-prob": "Regenwahrscheinlichkeit",
     },
     en: {
       today: "Today",
@@ -79,6 +82,9 @@ window.Signage = (function () {
       showers: "Showers",
       storm: "Thunderstorm",
       snow: "Snow",
+      "rain-yes": "Rain",
+      "rain-no": "No rain",
+      "rain-prob": "Rain probability",
     },
   };
 
@@ -117,9 +123,15 @@ window.Signage = (function () {
    * - Klein:  Symbol + Tag + Höchst-/Mindesttemperatur
    * - Mittel: zusätzlich die Beschreibung
    * - Groß:   zusätzlich der Tagesverlauf (Morgen/Mittag/Abend) je Tag
+   *
+   * Optionen `opts` (für die Wetterseite eines Ankündigungsbildes):
+   *   heading   – große Überschrift oberhalb des Wetters
+   *   todayOnly – nur den aktuellen Tag zeigen (keine "Morgen"-Vorhersage)
+   *               sowie "Regen / Kein Regen" und die Regenwahrscheinlichkeit
    */
-  function weatherMarkup(data, display, lang) {
+  function weatherMarkup(data, display, lang, opts) {
     const d = data || {};
+    const o = opts || {};
     const size = ["small", "medium", "large"].indexOf(display) >= 0 ? display : "large";
     const icon = (key) => WEATHER_ICONS[key] || WEATHER_ICONS.cloud;
     const show = (v) => {
@@ -150,6 +162,22 @@ window.Signage = (function () {
       </div>`;
     };
 
+    const rain = (section) => {
+      const s = section || {};
+      if (s.rain === undefined && s.rain_prob === undefined) return "";
+      const raining = s.rain ? t(lang, "rain-yes") : t(lang, "rain-no");
+      const prob = s.rain_prob > 0 ? `${s.rain_prob}%` : "--";
+      return `
+      <div class="weather-rain">
+        <span class="weather-rain-ico">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.7s6.5 6.9 6.5 11a6.5 6.5 0 01-13 0c0-4.1 6.5-11 6.5-11z"/></svg>
+        </span>
+        <span class="weather-rain-state">${esc(raining)}</span>
+        <span class="weather-rain-prob-label">${esc(t(lang, "rain-prob"))}</span>
+        <span class="weather-rain-prob">${esc(String(prob))}</span>
+      </div>`;
+    };
+
     const course = (label, section) => {
       const items = ((section && section.course) || []).map((p) => `
         <div class="weather-period">
@@ -165,14 +193,18 @@ window.Signage = (function () {
       </div>`;
     };
 
+    const today = d.today || {};
+    const showTomorrow = !o.todayOnly && !!(d.tomorrow && d.tomorrow.state !== undefined);
     return `
-      <div class="weather-blocks">
+      <div class="weather-blocks ${o.todayOnly ? "weather-today-only" : ""}">
+        ${o.heading ? `<div class="weather-heading">${esc(o.heading)}</div>` : ""}
         ${d.location ? `<div class="weather-location">${esc(d.location)}</div>` : ""}
         <div class="weather-days">
-          ${card("today", d.today)}
-          ${card("tomorrow", d.tomorrow)}
+          ${card("today", today)}
+          ${showTomorrow ? card("tomorrow", d.tomorrow) : ""}
         </div>
-        ${size === "large" ? `<div class="weather-courses">${course("today", d.today)}${course("tomorrow", d.tomorrow)}</div>` : ""}
+        ${o.todayOnly ? rain(today) : ""}
+        ${size === "large" ? `<div class="weather-courses">${course("today", today)}${showTomorrow ? course("tomorrow", d.tomorrow) : ""}</div>` : ""}
       </div>`;
   }
 

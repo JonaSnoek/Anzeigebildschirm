@@ -20,7 +20,10 @@ from ..config import BASE_DIR, Config
 from ..database import db
 from ..events import hub
 from ..models import Media
-from ..services.display import build_state
+from ..services.display import (
+    build_state,
+    refresh_announcement_weather,
+)
 from ..services.settings import get_all_settings
 from ..services import weather
 
@@ -63,6 +66,13 @@ def api_display():
     - timeline: zentrale Wiedergabeplanung (Start-/Endzeitpunkte je Element)
     - server_time: Serverzeit in Sekunden (für die Zeit-Synchronisation)
     """
+    # Veraltete Standort-Wetterdaten der Ankündigungsbilder zuerst auffrischen
+    # (nutzt den Cache weiter, falls das Netzwerk nicht verfügbar ist), damit
+    # der folgende Zustandsaufbau bereits aktuelle Daten enthält.
+    try:
+        refresh_announcement_weather()
+    except Exception:  # noqa: BLE001 – nie die Anzeige durch Wetter blockieren
+        pass
     state = build_state()
     state["server_time"] = time.time()
     return _no_cache(jsonify(state))
@@ -90,6 +100,10 @@ def events():
     Verbindung offen; der Client verbindet sich automatisch neu.
     """
     q = hub.subscribe()
+    try:
+        refresh_announcement_weather()
+    except Exception:  # noqa: BLE001 – nie die Anzeige durch Wetter blockieren
+        pass
     initial = {"kind": "state", "data": build_state(), "ts": time.time()}
 
     def stream():

@@ -50,6 +50,10 @@ class Config:
 
     UPLOAD_DIR = BASE_DIR / "uploads"
 
+    # Ankündigungsbilder: Projektdateien (JSON) und Hintergrundbilder des
+    # Editors werden getrennt von den normalen Medien aufbewahrt.
+    ANNOUNCEMENT_DIR = BASE_DIR / "uploads" / "announcements"
+
     # Medientyp -> Unterordner (Plural-Form)
     UPLOAD_FOLDERS = {
         "image": "images",

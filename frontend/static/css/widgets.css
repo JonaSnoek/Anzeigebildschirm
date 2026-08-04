@@ -307,3 +307,49 @@
   text-align: center;
   font-size: calc(clamp(2 * var(--screen-h) / 100, 4 * var(--screen-h) / 100, 5 * var(--screen-h) / 100) * var(--widget-scale));
 }
+
+/* --- Wetterseite eines Ankündigungsbildes ---
+   Gleiche Darstellung wie die große Wetter-Ansicht, aber mit eigener
+   Überschrift und ausschließlich dem Wetter des aktuellen Tages. */
+.weather-heading {
+  font-size: 1.6em;
+  font-weight: 800;
+  letter-spacing: .02em;
+  text-transform: uppercase;
+  text-shadow: 0 3px 18px rgba(0, 0, 0, .6);
+}
+
+.weather-today-only .weather-days { justify-content: center; }
+
+.weather-today-only .weather-card { flex: 0 1 24em; }
+
+.weather-today-only .weather-courses { max-width: 34em; margin: 0 auto; }
+
+/* Regen-Information: „Regen / Kein Regen“ + Regenwahrscheinlichkeit */
+.weather-rain {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: .5em;
+  background: rgba(255, 255, 255, .07);
+  border: 1px solid rgba(255, 255, 255, .12);
+  border-radius: .8em;
+  padding: .45em .9em;
+  margin: 0 auto;
+}
+
+.weather-rain-ico {
+  color: #8fc7ff;
+}
+
+.weather-rain-ico svg { width: 1.5em; height: 1.5em; }
+
+.weather-rain-state { font-weight: 700; }
+
+.weather-rain-prob-label { font-size: .72em; opacity: .75; }
+
+.weather-rain-prob {
+  font-weight: 700;
+  color: #8fc7ff;
+  min-width: 2.6em;
+}

@@ -11,6 +11,7 @@ from ..database import db
 from ..events import notify_display
 from ..models import Media
 from ..security import roles_required
+from ..services.announcements import delete_project, duplicate_announcement
 from ..services.media import delete_media_file, handle_upload, replace_file
 
 bp = Blueprint("media", __name__)
@@ -72,6 +73,7 @@ def delete(media_id):
     if media is None:
         return jsonify({"error": "Datei nicht gefunden."}), 404
     delete_media_file(media)
+    delete_project(media)  # Ankündigungsbilder: Projektdatei + Hintergrund entfernen
     db.session.delete(media)
     db.session.commit()
     notify_display()
@@ -134,6 +136,47 @@ def replace(media_id):
         return jsonify({"error": error}), 400
     notify_display()
     return jsonify({"ok": True, "item": new_media.to_dict()})
+
+
+@bp.post("/api/media/<int:media_id>/duplicate")
+@roles_required("admin", "editor")
+def duplicate(media_id):
+    """
+    Dupliziert ein Medium (Datei + Datenbankzeile). Bei Ankündigungsbildern
+    werden zusätzlich Projektdatei und Hintergrundbild kopiert, damit die
+    Kopie unabhängig weiterbearbeitet werden kann.
+    """
+    media = db.session.get(Media, media_id)
+    if media is None:
+        return jsonify({"error": "Datei nicht gefunden."}), 404
+
+    if media.project_file:
+        copy = duplicate_announcement(media)
+    else:
+        import shutil
+        import uuid
+        from pathlib import Path
+
+        folder = Config.UPLOAD_DIR / media.type
+        new_stored = f"{uuid.uuid4().hex}{Path(media.stored_name).suffix}"
+        src = folder / media.stored_name
+        dst = folder / new_stored
+        if src.exists():
+            shutil.copy2(src, dst)
+        copy = Media(
+            type=media.type,
+            name=f"{media.name} (Kopie)",
+            stored_name=new_stored,
+            mime_type=media.mime_type,
+            size_bytes=dst.stat().st_size if dst.exists() else 0,
+            duration=media.duration or 0.0,
+            sort_order=media.sort_order + 1,
+            active=True,
+        )
+    db.session.add(copy)
+    db.session.commit()
+    notify_display()
+    return jsonify({"ok": True, "item": copy.to_dict(), "counts": _counts()})
 
 
 @bp.post("/api/media/reorder")

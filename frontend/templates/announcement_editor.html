@@ -1,0 +1,267 @@
+{% extends "base.html" %}
+{% set active = "media" %}
+{% block title %}{{ 'Ankündigungsbild bearbeiten' if media_id else 'Neues Ankündigungsbild' }} · {{ site_name }}{% endblock %}
+{% block extra_head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/announcement_editor.css') }}">
+{% endblock %}
+
+{% block content %}
+<div id="announcement-page">
+  <div class="row-btns">
+    <h1 style="margin: 0;">{{ 'Ankündigungsbild bearbeiten' if media_id else 'Neues Ankündigungsbild' }}</h1>
+  </div>
+
+  <div class="announcement-layout">
+    <div class="announcement-controls">
+      <div class="card">
+        <h2>Name &amp; Speichern</h2>
+        <div class="field">
+          <label for="ann-name">Name</label>
+          <input type="text" id="ann-name" maxlength="200" value="{{ media_name }}" placeholder="z. B. Schulfest Ankündigung">
+        </div>
+        <div class="row-btns save-bar">
+          <button type="button" class="btn btn-primary btn-lg" id="ann-save-btn">Speichern</button>
+          <span id="ann-save-status" class="status"></span>
+        </div>
+        <div class="hint">
+          Beim Speichern wird das fertige Bild (PNG) in die Medienbibliothek
+          übernommen und wie ein normales Bild in der Wiedergabe verwendet.
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Hintergrund</h2>
+        <div class="field">
+          <label for="ann-bg-file">Bild wählen</label>
+          <input type="file" id="ann-bg-file" accept=".jpg,.jpeg,.png,.gif,.webp">
+        </div>
+        <div class="row-btns">
+          <button type="button" class="btn btn-small" id="ann-bg-reset" title="Position und Zoom zurücksetzen">Zurücksetzen</button>
+          <button type="button" class="btn btn-small" id="ann-bg-clear" title="Hintergrundbild entfernen">Entfernen</button>
+        </div>
+        <div class="slider-row">
+          <span class="slider-label">Zoom</span>
+          <input type="range" class="slider" id="ann-bg-zoom" min="5" max="500" step="5">
+          <span class="slider-value" id="ann-bg-zoom-val"></span>
+        </div>
+        <div class="slider-row">
+          <span class="slider-label">Abdunkeln (Overlay)</span>
+          <input type="range" class="slider" id="ann-overlay-opacity" min="0" max="90" step="1">
+          <span class="slider-value" id="ann-overlay-opacity-val"></span>
+        </div>
+        <div class="field">
+          <label for="ann-overlay-color">Overlay-Farbe</label>
+          <input type="color" id="ann-overlay-color" value="#000000">
+        </div>
+        <div class="hint">
+          Hintergrund in der Vorschau verschieben (Ziehen am Hintergrund),
+          zoomen und über die Bildschirmkanten „zuschneiden“. Das Overlay
+          dunkelt das Foto ab, damit Texte gut lesbar bleiben.
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Titel</h2>
+        <div class="field">
+          <label for="ann-title-text">Text</label>
+          <input type="text" id="ann-title-text" maxlength="80">
+        </div>
+        <div class="field">
+          <label for="ann-title-font">Schrift</label>
+          <select id="ann-title-font">
+            <option value="Arial Black">Arial Black</option>
+            <option value="Verdana">Verdana</option>
+            <option value="Georgia">Georgia</option>
+            <option value="Trebuchet MS">Trebuchet MS</option>
+            <option value="Courier New">Courier New</option>
+          </select>
+        </div>
+        <div class="slider-row">
+          <span class="slider-label">Größe</span>
+          <input type="range" class="slider" id="ann-title-size" min="40" max="320" step="2">
+          <span class="slider-value" id="ann-title-size-val"></span>
+        </div>
+        <div class="slider-row">
+          <span class="slider-label">Buchstabenabstand</span>
+          <input type="range" class="slider" id="ann-title-spacing" min="0" max="40" step="1">
+          <span class="slider-value" id="ann-title-spacing-val"></span>
+        </div>
+        <div class="field">
+          <label for="ann-title-color">Farbe</label>
+          <input type="color" id="ann-title-color" value="#FFFFFF">
+        </div>
+
+        <div class="checkbox-line">
+          <input type="checkbox" id="ann-underline-enabled">
+          <label for="ann-underline-enabled">Geschwungene Linie unter dem Titel</label>
+        </div>
+        <div class="slider-row">
+          <span class="slider-label">Linienbreite (% der Titelbreite)</span>
+          <input type="range" class="slider" id="ann-underline-width" min="20" max="100" step="1">
+          <span class="slider-value" id="ann-underline-width-val"></span>
+        </div>
+        <div class="slider-row">
+          <span class="slider-label">Stärke</span>
+          <input type="range" class="slider" id="ann-underline-thickness" min="2" max="40" step="1">
+          <span class="slider-value" id="ann-underline-thickness-val"></span>
+        </div>
+        <div class="slider-row">
+          <span class="slider-label">Abstand zum Titel</span>
+          <input type="range" class="slider" id="ann-underline-offset" min="0" max="120" step="1">
+          <span class="slider-value" id="ann-underline-offset-val"></span>
+        </div>
+        <div class="field">
+          <label for="ann-underline-color">Linienfarbe</label>
+          <input type="color" id="ann-underline-color" value="#F4B942">
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Untertitel</h2>
+        <div class="field">
+          <label for="ann-subtitle-text">Text (mehrzeilig mit Enter)</label>
+          <textarea id="ann-subtitle-text" rows="2" maxlength="200"></textarea>
+        </div>
+        <div class="field">
+          <label for="ann-subtitle-font">Schrift</label>
+          <select id="ann-subtitle-font">
+            <option value="Verdana">Verdana</option>
+            <option value="Arial">Arial</option>
+            <option value="Georgia">Georgia</option>
+            <option value="Trebuchet MS">Trebuchet MS</option>
+            <option value="Courier New">Courier New</option>
+          </select>
+        </div>
+        <div class="slider-row">
+          <span class="slider-label">Größe</span>
+          <input type="range" class="slider" id="ann-subtitle-size" min="20" max="160" step="1">
+          <span class="slider-value" id="ann-subtitle-size-val"></span>
+        </div>
+        <div class="slider-row">
+          <span class="slider-label">Zeilenabstand</span>
+          <input type="range" class="slider" id="ann-subtitle-lineheight" min="100" max="220" step="5">
+          <span class="slider-value" id="ann-subtitle-lineheight-val"></span>
+        </div>
+        <div class="slider-row">
+          <span class="slider-label">Buchstabenabstand</span>
+          <input type="range" class="slider" id="ann-subtitle-spacing" min="0" max="20" step="1">
+          <span class="slider-value" id="ann-subtitle-spacing-val"></span>
+        </div>
+        <div class="field">
+          <label for="ann-subtitle-color">Farbe</label>
+          <input type="color" id="ann-subtitle-color" value="#E8E8E8">
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Info-Feld (Pinsel, unten links)</h2>
+        <div class="checkbox-line">
+          <input type="checkbox" id="ann-info-date-enabled">
+          <label for="ann-info-date-enabled">Datum / Tag zeigen</label>
+        </div>
+        <div class="field">
+          <label for="ann-info-date-text">Text (z. B. Heute / Morgen / Freitag)</label>
+          <input type="text" id="ann-info-date-text" maxlength="60">
+        </div>
+        <div class="checkbox-line">
+          <input type="checkbox" id="ann-info-location-enabled">
+          <label for="ann-info-location-enabled">Standort zeigen</label>
+        </div>
+        <div class="field">
+          <label for="ann-info-location-text">Text (z. B. Aula)</label>
+          <input type="text" id="ann-info-location-text" maxlength="60">
+        </div>
+        <div class="slider-row">
+          <span class="slider-label">Breite</span>
+          <input type="range" class="slider" id="ann-info-width" min="300" max="1200" step="10">
+          <span class="slider-value" id="ann-info-width-val"></span>
+        </div>
+        <div class="slider-row">
+          <span class="slider-label">Symbolgröße</span>
+          <input type="range" class="slider" id="ann-info-iconsize" min="20" max="90" step="1">
+          <span class="slider-value" id="ann-info-iconsize-val"></span>
+        </div>
+        <div class="field">
+          <label for="ann-info-textcolor">Schriftfarbe</label>
+          <input type="color" id="ann-info-textcolor" value="#222222">
+        </div>
+        <div class="hint">
+          Das weiße Feld mit Kalender- und Standort-Icon. Text, Größen und
+          Position lassen sich frei anpassen – die Position direkt in der
+          Vorschau verschieben.
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Wetterseite</h2>
+        <p class="hint">
+          Optional: Nach diesem Ankündigungsbild erscheint eine eigene
+          Wetterseite – im selben Design wie die große Wetter-Ansicht.
+          Es werden nur die Daten des heutigen Tages gezeigt
+          (Zustand, Höchst-/Tiefsttemperatur, Regen ja/nein und
+          Regenwahrscheinlichkeit) und automatisch aktualisiert.
+        </p>
+        <div class="checkbox-line">
+          <input type="checkbox" id="ann-weather-enabled">
+          <label for="ann-weather-enabled">Wetter nach diesem Bild anzeigen</label>
+        </div>
+        <div class="field">
+          <label for="ann-weather-location">Standort</label>
+          <input type="text" id="ann-weather-location" maxlength="120" placeholder="z. B. Berlin">
+          <div class="hint">Wetterdaten werden automatisch über Open-Meteo abgerufen.</div>
+        </div>
+        <div class="field">
+          <label for="ann-weather-heading">Eigene Überschrift (optional)</label>
+          <input type="text" id="ann-weather-heading" maxlength="120" placeholder="z. B. Wetter in Berlin">
+          <div class="hint">Ohne Überschrift bleibt die Seite frei – wie beim Systemwetter.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="announcement-preview">
+      <div class="card preview-card">
+        <div class="row-btns">
+          <h2 style="margin: 0;">Vorschau</h2>
+          <span class="hint">1920 × 1080</span>
+          <span class="status" id="ann-selected-layer"></span>
+        </div>
+        <div class="preview-wrap">
+          <div class="ann-canvas-wrap" id="ann-canvas-wrap">
+            <canvas id="ann-canvas" width="1920" height="1080"></canvas>
+          </div>
+        </div>
+        <div class="hint">
+          Ebenen (festes Design, nur Inhalte bearbeitbar):
+        </div>
+        <div class="ann-layers" id="ann-layers">
+          <span data-layer="background">Hintergrund</span>
+          <span data-layer="overlay">Abdunkeln</span>
+          <span data-layer="title">Titel</span>
+          <span data-layer="underline">Linie</span>
+          <span data-layer="subtitle">Untertitel</span>
+          <span data-layer="info">Info-Feld</span>
+        </div>
+        <div class="row-btns">
+          <label class="checkbox-line" style="margin: 0;">
+            <input type="checkbox" id="ann-grid-enabled">
+            <span>Raster</span>
+          </label>
+          <button type="button" class="btn btn-small" id="ann-snap-enabled" title="An Raster und Hilfslinien ausrichten">Einrasten</button>
+        </div>
+        <div class="hint">
+          Inhalte direkt in der Vorschau verschieben. Beim Ziehen rasten
+          Elemente an der Bildschirmmitte, den Kanten und anderen Elementen
+          ein; gestrichelte Linien zeigen die Ausrichtung.
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  window.ANNOUNCEMENT_PROJECT = {{ project_json | safe }};
+  window.ANNOUNCEMENT_MEDIA_ID = {{ media_id if media_id is not none else 'null' }};
+  window.ANNOUNCEMENT_BG_PREFIX = "{{ url_for('announcements.background_file', filename='__') }}".replace("__", "");
+</script>
+<script src="{{ url_for('static', filename='js/announcement_editor.js') }}"></script>
+{% endblock %}
