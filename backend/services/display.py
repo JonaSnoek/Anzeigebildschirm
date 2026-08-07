@@ -12,8 +12,10 @@ unabhängig davon, wann sie geöffnet wurden. Der Server gibt die Reihenfolge
 und die Anzeigedauer zentral vor.
 
 Element-Typen: "image", "video", "clock" (Uhr-Ansicht zwischen den Medien,
-sofern clock_interstitial aktiv ist) und "weather" (eigene große Wetter-Ansicht,
-sofern weather_interstitial aktiv ist). Jedes Ankündigungsbild trägt außerdem
+sofern clock_interval aktiv ist) und "weather" (eigene große Wetter-Ansicht,
+sofern weather_interval aktiv ist). Beide Intervalle sind getrennt
+konfigurierbar (1 = nach jeder Folie, N = alle N Folien, off = aus).
+Jedes Ankündigungsbild trägt außerdem
 seine eigene Uhr-Konfiguration (Sichtbarkeit, Farbe, Schatten) im Slot.
 """
 
@@ -25,7 +27,7 @@ from ..database import db
 from ..models import Media
 from ..services import weather as weather_svc
 from ..services.announcements import load_project
-from ..services.settings import get_all_settings
+from ..services.settings import get_all_settings, interval_step
 
 # Fallback-Dauer für Videos, deren echte Länge noch nicht bekannt ist.
 # Sobald ein Anzeige-Client die tatsächliche Länge meldet (/api/display/report),
@@ -144,21 +146,10 @@ def _timeline_slots(items, settings: dict, aw_configs: dict = None):
     slide = int(settings.get("slide_duration", "8") or 8)
     loop = settings.get("loop", "true") != "false"
     # Zwischenansichten sind unabhängig vom Widget-Schalter: Die große Ansicht
-    # wird eingeblendet, sobald das Interstitial aktiv ist – auch wenn das
-    # kleine Widget während der Medien ausgeschaltet ist.
-    clock_on = settings.get("clock_interstitial", "false") == "true"
-    weather_on = settings.get("weather_interstitial", "false") == "true"
-
-    def interstitial_slots():
-        """Uhr- und Wetter-Zwischenansicht – einzeln, nie zusammen groß."""
-        out = []
-        if clock_on:
-            out.append({"type": "clock", "id": None, "name": "", "url": "",
-                        "duration": float(slide)})
-        if weather_on:
-            out.append({"type": "weather", "id": None, "name": "", "url": "",
-                        "duration": float(slide)})
-        return out
+    # wird eingeblendet, sobald das Intervall aktiv ist – auch wenn das kleine
+    # Widget während der Medien ausgeschaltet ist. Intervall 0 = aus.
+    clock_step = interval_step(settings, "clock_interval")
+    weather_step = interval_step(settings, "weather_interval")
 
     def announcement_weather_slot(item):
         """Eigene Wetterseite eines Ankündigungsbildes (oder None)."""
@@ -182,6 +173,7 @@ def _timeline_slots(items, settings: dict, aw_configs: dict = None):
         }
 
     slots = []
+    media_count = 0
     for item in items:
         config = aw_configs.get(item.id)
         slots.append({
@@ -201,12 +193,16 @@ def _timeline_slots(items, settings: dict, aw_configs: dict = None):
         aw = announcement_weather_slot(item)
         if aw:
             slots.append(aw)
-        if (clock_on or weather_on) and len(items) > 1:
-            slots.extend(interstitial_slots())
-
-    # Ein einzelnes Medium wiederholt sich ohne Zwischenansicht.
-    if (clock_on or weather_on) and len(items) == 1 and loop:
-        slots.extend(interstitial_slots())
+        # Uhr-/Wetter-Zwischenansichten nach jeder N-ten Medien-Folie
+        # (unabhängige Intervalle; der Zähler zählt nur Bilder/Videos,
+        # nie zusammen in einem Slot).
+        media_count += 1
+        if clock_step and media_count % clock_step == 0:
+            slots.append({"type": "clock", "id": None, "name": "", "url": "",
+                          "duration": float(slide)})
+        if weather_step and media_count % weather_step == 0:
+            slots.append({"type": "weather", "id": None, "name": "", "url": "",
+                          "duration": float(slide)})
 
     # Ohne Loop endet der Zyklus sauber beim letzten Medium. Die Wetterseite
     # eines Ankündigungsbildes gehört zum Bild und wird NICHT entfernt.
@@ -238,8 +234,8 @@ def _signature(items, settings: dict, aw_configs: dict = None) -> str:
         announce,
         str(settings.get("slide_duration", "8")),
         str(settings.get("loop", "true")),
-        str(settings.get("clock_interstitial", "false")),
-        str(settings.get("weather_interstitial", "false")),
+        str(settings.get("clock_interval", "off")),
+        str(settings.get("weather_interval", "off")),
     ])
 
 

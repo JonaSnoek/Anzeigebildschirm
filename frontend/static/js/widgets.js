@@ -219,10 +219,31 @@ window.Signage = (function () {
    * Item-Form: { x, y, w, h, rotation, opacity, html, refresh, interval }.
    * Aktualisierung: neues iframe unsichtbar erzeugen, nach dem Laden
    * umschalten (kein Flackern, kein weißer Bildschirm).
+   *
+   * Fehlerbehandlung: In jedes iframe wird ein kleiner Beobachter injiziert,
+   * der Script- und Ressourcen-Fehler an das Elternfenster meldet
+   * (postMessage). Statt einer leeren Fläche zeigt das Widget dann eine
+   * verständliche Meldung:
+   *   - script   → „Fehler beim Rendern des HTML-Codes.“
+   *   - resource → „Externe Ressource nicht erreichbar.“
+   *   - timeout  → „Widget konnte nicht geladen werden.“
    */
   const HtmlWidgets = (function () {
     const toNum = (v, d) => (typeof v === "number" && isFinite(v) ? v : d);
     const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+
+    const WIDGET_ERRORS = {
+      script: "Fehler beim Rendern des HTML-Codes.",
+      resource: "Externe Ressource nicht erreichbar.",
+      timeout: "Widget konnte nicht geladen werden.",
+    };
+
+    /* Beobachter, der in jedes Widget-Dokument injiziert wird. Meldet
+       Script-Fehler, Promise-Fehler und fehlgeschlagene Ressourcen
+       (Bilder, Skripte, Styles, iframes) an das Elternfenster. */
+    function widgetScript() {
+      return "<scr" + "ipt>(function(){function r(t,d){try{parent.postMessage({__signageWidgetStatus:true,type:t,detail:d||\"\"},\"*\")}catch(e){}}window.addEventListener(\"error\",function(e){if(e&&e.target&&e.target!==window&&e.target!==document){r(\"resource\",String(e.target.tagName||\"element\"))}else{r(\"script\",(e&&e.message)||\"Script-Fehler\")}},true);window.addEventListener(\"unhandledrejection\",function(e){r(\"script\",(e&&e.reason&&e.reason.message)||\"Promise-Fehler\")})})()</scr" + "ipt>";
+    }
 
     function contentBox(width, height, container) {
       const cw = container ? (container.clientWidth || container.getBoundingClientRect().width) : window.innerWidth;
@@ -247,8 +268,97 @@ window.Signage = (function () {
       f.className = "hw-frame";
       f.setAttribute("scrolling", "no");
       f.setAttribute("frameborder", "0");
-      f.srcdoc = item.html == null ? "" : String(item.html);
+      f.srcdoc = srcdoc(item.html);
       return f;
+    }
+
+    /* Vollständiges Widget-Dokument: Standards-Modus + Beobachter VOR dem
+       Nutzercode, damit auch Fehler während des Parsens von Nutzer-Skripten
+       erfasst werden (die Meldung erscheint statt einer leeren Fläche). */
+    function srcdoc(html) {
+      return "<!doctype html><meta charset=\"utf-8\">" + widgetScript() + String(html == null ? "" : html);
+    }
+
+    /* Beobachter pro iframe: meldet „load“, sammelt Fehlermeldungen des
+       injizierten Skripts und zeigt nach einer kurzen Schonfrist eine
+       verständliche Fehlermeldung statt einer leeren Fläche. */
+    function watch(node, frame) {
+      const prev = node.querySelector(".hw-error");
+      if (prev) prev.remove();
+      frame._settled = false;
+      frame._loadFailed = false;
+      let errors = [];
+      let stopWatch = null;
+      let evaluated = false;
+
+      const finish = () => {
+        if (evaluated) return;
+        evaluated = true;
+        frame._settled = true;
+        if (stopWatch) stopWatch();
+        if (frame._failTimer) { clearTimeout(frame._failTimer); frame._failTimer = null; }
+        const type = errors[0] || (frame._loadFailed ? "timeout" : null);
+        if (type) setStatus(node, type);
+      };
+
+      stopWatch = () => {
+        if (stopWatch._off) return;
+        stopWatch._off = true;
+        window.removeEventListener("message", onMessage);
+      };
+
+      function onMessage(event) {
+        if (event.source !== frame.contentWindow) return;
+        const d = event.data;
+        if (!d || d.__signageWidgetStatus !== true) return;
+        if (d.type === "script" || d.type === "resource") {
+          if (errors.indexOf(d.type) < 0) errors.push(d.type);
+        }
+      }
+
+      frame._stopWatch = stopWatch;
+      window.addEventListener("message", onMessage);
+
+      frame.addEventListener("load", function onLoad() {
+        frame.removeEventListener("load", onLoad);
+        if (frame._settled) return;
+        setTimeout(finish, 400);
+      }, { once: true });
+
+      // Lade-Timeout: srcdoc lädt praktisch immer – falls doch nicht,
+      // erscheint eine klare Meldung statt einer leeren Fläche.
+      frame._failTimer = setTimeout(() => {
+        frame._loadFailed = true;
+        finish();
+      }, 15000);
+    }
+
+    function setStatus(node, type) {
+      if (node._settledType) return;
+      node._settledType = type;
+      const overlay = document.createElement("div");
+      overlay.className = "hw-error";
+      overlay.textContent = WIDGET_ERRORS[type] || WIDGET_ERRORS.timeout;
+      node.appendChild(overlay);
+    }
+
+    /* Entfernt den aktuellen Status (z. B. vor einem manuellen Neuladen). */
+    function clearStatus(node) {
+      node._settledType = null;
+      const overlay = node.querySelector(".hw-error");
+      if (overlay) overlay.remove();
+    }
+
+    /* Räumt Beobachter/Timer eines Widget-Knotens auf (vor dem Entfernen). */
+    function dispose(node) {
+      if (!node) return;
+      const frame = node._frame;
+      if (frame) {
+        if (frame._stopWatch) frame._stopWatch();
+        if (frame._failTimer) clearTimeout(frame._failTimer);
+        frame._stopWatch = null;
+        frame._failTimer = null;
+      }
     }
 
     function createNode(item, box) {
@@ -256,6 +366,7 @@ window.Signage = (function () {
       root.className = "hw";
       root._frame = frame(item);
       root.appendChild(root._frame);
+      watch(root, root._frame);
       place(root, item, box);
       return root;
     }
@@ -264,15 +375,21 @@ window.Signage = (function () {
        nach dem Laden (oder spätestens nach 8 s) umschalten. */
     function refresh(node, item) {
       const old = node._frame;
+      clearStatus(node);
       const fresh = frame(item);
       fresh.style.opacity = "0";
       node.appendChild(fresh);
       node._frame = fresh;
+      watch(node, fresh);
       let done = false;
       const swap = () => {
         if (done) return;
         done = true;
-        if (old && old.parentNode === node) node.removeChild(old);
+        if (old && old.parentNode === node) {
+          node.removeChild(old);
+          if (old._stopWatch) old._stopWatch();
+          if (old._failTimer) clearTimeout(old._failTimer);
+        }
         fresh.style.opacity = "1";
       };
       fresh.addEventListener("load", swap, { once: true });
@@ -286,7 +403,20 @@ window.Signage = (function () {
       return setInterval(() => refresh(node, item), ms);
     }
 
-    return { contentBox, createNode, place, refresh, startTimer };
+    return {
+      contentBox,
+      createNode,
+      place,
+      refresh,
+      startTimer,
+      watch,
+      clearStatus,
+      dispose,
+      frame,
+      srcdoc,
+      widgetScript,
+      WIDGET_ERRORS,
+    };
   })();
 
   return {

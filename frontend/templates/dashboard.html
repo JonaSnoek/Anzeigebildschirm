@@ -46,7 +46,7 @@
           {% if stats.settings.clock_enabled == 'true' %}
             {{ stats.settings.clock_size_pct }} %
             ({{ 'manuell' if stats.settings.clock_mode == 'custom' else 'automatisch' }})
-            {% if stats.settings.clock_interstitial == 'true' %} · Zwischenansicht{% endif %}
+            {% if stats.settings.clock_interval != 'off' %} · Zwischenansicht nach {{ 'jeder Folie' if stats.settings.clock_interval == '1' else 'alle ' + stats.settings.clock_interval + ' Folien' }}{% endif %}
           {% else %}aus{% endif %}
         </div>
         <div class="chip"><span class="dot"></span>Wetter:

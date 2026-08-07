@@ -91,6 +91,7 @@
     }
     lastWidgetSig = sig;
     stopWidgetTimers();
+    widgetNodes.forEach((w) => Signage.HtmlWidgets.dispose(w.node));
     WIDGET_LAYER.innerHTML = "";
     widgetNodes = [];
     if (!cfg || !cfg.items || !cfg.items.length) return;
@@ -140,7 +141,7 @@
       clockY: toInt(s.clock_y, 50, 0, 100),
       clockSizePct: toInt(s.clock_size_pct, 100, 30, 600) / 100,
       clockBigSizePct: toInt(s.clock_big_size_pct, 100, 30, 600) / 100,
-      interstitial: s.clock_interstitial === "true",
+      interstitial: s.clock_interval !== "off" && String(s.clock_interval || "off").trim() !== "",
 
       weatherEnabled: s.weather_enabled !== "false",
       weatherDisplay: ["small", "medium", "large"].indexOf(s.weather_display) >= 0

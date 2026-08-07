@@ -370,7 +370,7 @@ if (mediaPage) {
 /* ======================================================================
  * EINSTELLUNGEN
  * ====================================================================== */
-const settingsForm = document.getElementById("settings-form");
+  const settingsForm = document.getElementById("settings-form");
 if (settingsForm) {
   const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
 
@@ -380,8 +380,37 @@ if (settingsForm) {
   if (volumeRange) volumeRange.addEventListener("input", updateVolumeLabel);
   updateVolumeLabel();
 
+  /* Folien-Intervall der großen Uhr-/Wetter-Ansicht: "off", "1"…"999".
+     Bei „Benutzerdefiniert“ kommt die Zahl aus dem Eingabefeld; ungültige
+     Werte liefern null (der Aufrufer bricht dann ab). */
+  function intervalValue(name) {
+    const sel = settingsForm[name + "_interval"];
+    if (!sel) return "off";
+    const v = sel.value;
+    if (v !== "custom") return v;
+    const cus = settingsForm[name + "_interval_custom"];
+    const n = parseInt(cus ? cus.value : "", 10);
+    if (isNaN(n) || n < 1 || n > 999) return null;
+    return String(n);
+  }
+
+  function syncIntervalFields() {
+    ["clock", "weather"].forEach((name) => {
+      const sel = settingsForm[name + "_interval"];
+      const field = document.getElementById(name + "_interval_custom_field");
+      if (!sel || !field) return;
+      field.style.display = sel.value === "custom" ? "" : "none";
+    });
+  }
+
   settingsForm.addEventListener("submit", async (e) => {
     e.preventDefault();
+    const clockInterval = intervalValue("clock");
+    const weatherInterval = intervalValue("weather");
+    if (clockInterval === null || weatherInterval === null) {
+      toast("Bitte eine gültige Zahl für das benutzerdefinierte Folien-Intervall eingeben (1–999).", "error");
+      return;
+    }
     const body = {
       slide_duration: parseInt(settingsForm.slide_duration.value, 10),
       transition: settingsForm.transition.value,
@@ -396,7 +425,7 @@ if (settingsForm) {
       clock_y: parseInt(settingsForm.clock_y.value, 10),
       clock_size_pct: parseInt(settingsForm.clock_size_pct.value, 10),
       clock_big_size_pct: parseInt(settingsForm.clock_big_size_pct.value, 10),
-      clock_interstitial: settingsForm.clock_interstitial.checked,
+      clock_interval: clockInterval,
 
       weather_enabled: settingsForm.weather_enabled.checked,
       weather_display: settingsForm.weather_display.value,
@@ -406,7 +435,7 @@ if (settingsForm) {
       weather_y: parseInt(settingsForm.weather_y.value, 10),
       weather_size_pct: parseInt(settingsForm.weather_size_pct.value, 10),
       weather_big_size_pct: parseInt(settingsForm.weather_big_size_pct.value, 10),
-      weather_interstitial: settingsForm.weather_interstitial.checked,
+      weather_interval: weatherInterval,
     };
     try {
       await api("/api/settings", { method: "POST", body });
@@ -458,7 +487,7 @@ if (settingsForm) {
     const f = settingsForm;
     return {
       enabled: f[name + "_enabled"].checked,
-      interstitial: f[name + "_interstitial"].checked,
+      interval: intervalValue(name) || "off",
       mode: f[name + "_mode"].value,
       x: parseInt(f[name + "_x"].value, 10),
       y: parseInt(f[name + "_y"].value, 10),
@@ -522,7 +551,7 @@ if (settingsForm) {
     // Unabhängig vom Widget-Schalter: sie erscheint, sobald das Interstitial
     // aktiv ist. Nur wenn Widget UND Interstitial aus sind, bleibt sie leer.
     previewClockScreen.classList.toggle("hidden", !idle);
-    previewClockScreen.classList.toggle("no-clock", !(clock.enabled || clock.interstitial));
+    previewClockScreen.classList.toggle("no-clock", !(clock.enabled || clock.interval !== "off"));
     if (idle) {
       previewClockBlock.style.setProperty("--widget-scale", clock.bigSizePct / 100);
       previewClockBlock.classList.toggle("clock-custom", clock.mode === "custom");
@@ -629,6 +658,7 @@ if (settingsForm) {
     }
     liveWidgetSig = sig;
     stopPreviewWidgetTimers();
+    previewWidgets.forEach((w) => Signage.HtmlWidgets.dispose(w.node));
     layer.innerHTML = "";
     previewWidgets = [];
     if (!cfg || !cfg.items || !cfg.items.length) return;
@@ -818,6 +848,11 @@ if (settingsForm) {
     el.addEventListener("input", renderPreview);
     el.addEventListener("change", renderPreview);
   });
+  ["clock_interval", "weather_interval"].forEach((id) => {
+    const sel = document.getElementById(id);
+    if (sel) sel.addEventListener("change", syncIntervalFields);
+  });
+  syncIntervalFields();
   window.addEventListener("resize", renderPreview);
 
   updatePreviewClock();

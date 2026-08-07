@@ -383,3 +383,27 @@
   display: block;
   transition: opacity .4s ease;
 }
+
+/* Fehlermeldung statt leerer Fläche, wenn ein HTML-Widget nicht geladen
+   werden kann, sein Code einen Fehler wirft oder externe Ressourcen
+   nicht erreichbar sind. Gilt für Anzeige, Vorschau und Editor. */
+.hw-error {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  padding: .8em 1em;
+  text-align: center;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size: calc(clamp(1 * var(--screen-h) / 100, 1.4 * var(--screen-h) / 100, 2 * var(--screen-h) / 100));
+  font-weight: 600;
+  line-height: 1.4;
+  color: #ffc9c9;
+  background: rgba(40, 12, 16, .62);
+  border: 1px dashed rgba(255, 140, 140, .55);
+  border-radius: 6px;
+  pointer-events: none;
+}

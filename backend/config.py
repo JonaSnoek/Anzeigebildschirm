@@ -91,7 +91,7 @@ class Config:
         "clock_y": "50",                # 0–100 (% vertikale Position, nur custom)
         "clock_size_pct": "100",        # 30–600 (% Skalierung des Uhr-Widgets bei Medien)
         "clock_big_size_pct": "100",    # 30–600 (% Skalierung der großen Uhr-Ansicht ohne Medien)
-        "clock_interstitial": "false",  # Uhr-Ansicht zwischen den Medien einblenden
+        "clock_interval": "off",        # Uhr-Ansicht nach jeder N-ten Folie (off | 1–999)
 
         # Wetter-Widget
         "weather_enabled": "false",     # Wetter-Widget anzeigen
@@ -102,7 +102,7 @@ class Config:
         "weather_y": "50",              # 0–100 (% vertikale Position, nur custom)
         "weather_size_pct": "100",      # 30–600 (% Skalierung des Wetter-Widgets bei Medien)
         "weather_big_size_pct": "100",  # 30–600 (% Skalierung der großen Wetter-Ansicht)
-        "weather_interstitial": "false", # große Wetter-Ansicht zwischen den Medien einblenden
+        "weather_interval": "off",      # große Wetter-Ansicht nach jeder N-ten Folie (off | 1–999)
     }
 
     # ---- Wetter -------------------------------------------------------------

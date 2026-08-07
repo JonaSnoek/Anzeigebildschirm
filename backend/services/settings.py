@@ -16,6 +16,7 @@ from ..models import Setting
 #   ("choice", [erlaubte_werte])
 #   ("int", minimum, maximum)
 #   ("str", maximale_länge)
+#   ("interval", minimum, maximum)  # "off" oder Ganzzahl (Folien-Intervall)
 ALLOWED = {
     "slide_duration": ("int", 3, 300),
     "transition": ("choice", ["fade", "none"]),
@@ -31,7 +32,7 @@ ALLOWED = {
     "clock_y": ("int", 0, 100),
     "clock_size_pct": ("int", 30, 600),
     "clock_big_size_pct": ("int", 30, 600),
-    "clock_interstitial": ("bool",),
+    "clock_interval": ("interval", 1, 999),
 
     # Wetter-Widget
     "weather_enabled": ("bool",),
@@ -42,14 +43,41 @@ ALLOWED = {
     "weather_y": ("int", 0, 100),
     "weather_size_pct": ("int", 30, 600),
     "weather_big_size_pct": ("int", 30, 600),
-    "weather_interstitial": ("bool",),
+    "weather_interval": ("interval", 1, 999),
 }
+
+
+def _normalize_interval(key: str, raw) -> str:
+    """Normalisiert einen Folien-Intervallwert: \"off\" (deaktiviert) oder
+    eine Ganzzahl zwischen minimum und maximum (1 = nach jeder Folie)."""
+    if str(raw).strip().lower() in ("off", "false", "none", ""):
+        return "off"
+    rule = ALLOWED[key]
+    low, high = rule[1], rule[2]
+    try:
+        value = int(raw)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"Ungültiger Zahlenwert für {key}.") from exc
+    if value < low or value > high:
+        raise ValueError(f"Wert für {key} muss zwischen {low} und {high} liegen.")
+    return str(value)
 
 
 def get_all_settings() -> dict:
     """Liest alle gespeicherten Einstellungen als Dict (Key -> Value)."""
     rows = db.session.execute(select(Setting)).scalars().all()
     return {s.key: s.value for s in rows}
+
+
+def interval_step(settings: dict, key: str, default: str = "off") -> int:
+    """Folien-Intervall einer Einstellung: 0 = aus, sonst Anzahl Folien."""
+    value = str(settings.get(key) if settings.get(key) is not None else default).strip().lower()
+    if value in ("", "off", "false", "none"):
+        return 0
+    try:
+        return max(1, int(value))
+    except (TypeError, ValueError):
+        return 0
 
 
 def _normalize(key: str, raw) -> str:
@@ -76,6 +104,8 @@ def _normalize(key: str, raw) -> str:
         if value < low or value > high:
             raise ValueError(f"Wert für {key} muss zwischen {low} und {high} liegen.")
         return str(value)
+    if kind == "interval":
+        return _normalize_interval(key, raw)
     if kind == "str":
         return str(raw).strip()[: rule[1]]
     return str(raw)

@@ -1442,12 +1442,58 @@
     return node;
   }
 
+  function widgetSrcdoc(html) {
+    return window.Signage && Signage.HtmlWidgets && Signage.HtmlWidgets.srcdoc
+      ? Signage.HtmlWidgets.srcdoc(html)
+      : String(html == null ? "" : html);
+  }
+
+  const widgetTimers = new Map(); // el.id -> Auto-Refresh-Timer (Editor)
+
+  /* Komplette Neuinitialisierung eines Widgets: frisches iframe erzeugen und
+     die Fehlerüberwachung neu starten. Dient dem „🔄 Widget neu laden“-Button
+     und dem automatischen Refresh (Standard: alle 5 Minuten). */
+  function reloadWidgetNode(node, el) {
+    const html = el.html == null ? "" : String(el.html);
+    node._html = html;
+    const old = node._frame;
+    const frame = document.createElement("iframe");
+    frame.className = "ae-hw-frame";
+    frame.setAttribute("scrolling", "no");
+    frame.setAttribute("frameborder", "0");
+    frame.srcdoc = widgetSrcdoc(html);
+    if (old && old.parentNode === node) {
+      node.replaceChild(frame, old);
+      if (old._stopWatch) old._stopWatch();
+      if (old._failTimer) clearTimeout(old._failTimer);
+    } else {
+      node.appendChild(frame);
+    }
+    node._frame = frame;
+    if (window.Signage && Signage.HtmlWidgets && Signage.HtmlWidgets.watch) {
+      Signage.HtmlWidgets.clearStatus(node);
+      Signage.HtmlWidgets.watch(node, frame);
+    }
+  }
+
+  function stopWidgetAutoRefresh(id) {
+    const t = widgetTimers.get(id);
+    if (t) { clearInterval(t); widgetTimers.delete(id); }
+  }
+
+  /* Auto-Refresh im Editor: Intervall des Widgets (Standard 5 Minuten).
+     Wird bei jeder Vorschau-Aktualisierung neu gestartet, damit Änderungen
+     an Intervall/Schalter sofort greifen. */
+  function startWidgetAutoRefresh(el, node) {
+    stopWidgetAutoRefresh(el.id);
+    if (el.refresh === false) return;
+    const minutes = clamp(Math.round(num(el.interval, 5)), 1, 1440);
+    widgetTimers.set(el.id, setInterval(() => reloadWidgetNode(node, el), minutes * 60 * 1000));
+  }
+
   function syncWidgetNode(node, el) {
     const html = el.html == null ? "" : String(el.html);
-    if (node._html !== html) {
-      node._html = html;
-      node._frame.srcdoc = html;
-    }
+    if (node._html !== html) reloadWidgetNode(node, el);
   }
 
   /* Beim Tippen im HTML-Editor wird das iframe erst nach einer kurzen Pause
@@ -1477,9 +1523,13 @@
       node.classList.toggle("selected", el.id === selectedId);
       if (!node.parentNode) widgetLayer.appendChild(node);
       syncWidgetNode(node, el);
+      startWidgetAutoRefresh(el, node);
     }
     for (const [id, node] of widgetNodes) {
       if (!seen.has(id)) {
+        stopWidgetAutoRefresh(id);
+        if (node._frame && node._frame._stopWatch) node._frame._stopWatch();
+        if (node._frame && node._frame._failTimer) clearTimeout(node._frame._failTimer);
         node.remove();
         widgetNodes.delete(id);
       }
@@ -2406,6 +2456,9 @@
     h += checkRow("Automatische Aktualisierung", "refresh");
     h += numField("interval", "Intervall (Min.)");
     h += `<div class="ae-hint">Beim Anzeigen geladen, danach in diesem Intervall neu initialisiert – flackerfrei (Standard: 5 Minuten).</div>`;
+    h += `<div class="ae-insp-sub">Vorschau</div>`;
+    h += `<button type="button" class="ae-btn ae-widget-reload" data-act="reload-widget">🔄 Widget neu laden</button>`;
+    h += `<div class="ae-hint">Lädt das Widget sofort neu (z. B. nach einer Code-Änderung oder um externe Daten frisch abzurufen). Fehlerhafte Widgets zeigen statt einer leeren Fläche eine Meldung.</div>`;
     return h;
   }
 
@@ -2484,6 +2537,10 @@
           });
         }
         if (act === "remove-image") { const old = el.file; el.file = ""; if (old) delete imageCache[old]; render(); renderInspector(); }
+        if (act === "reload-widget") {
+          const node = widgetNodes.get(el.id);
+          if (node) reloadWidgetNode(node, el);
+        }
       });
     });
 

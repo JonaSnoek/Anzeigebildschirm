@@ -5,6 +5,15 @@
 {% block content %}
   <h1>Wiedergabe-Einstellungen</h1>
 
+  {% set clock_iv = settings.clock_interval if settings.clock_interval is defined else 'off' %}
+  {% set clock_iv_presets = ['1', '2', '3', '5', '10', 'off'] %}
+  {% set clock_iv_custom = clock_iv not in clock_iv_presets %}
+  {% set clock_iv_custom_value = clock_iv if clock_iv_custom else '2' %}
+  {% set weather_iv = settings.weather_interval if settings.weather_interval is defined else 'off' %}
+  {% set weather_iv_presets = ['1', '2', '3', '5', '10', 'off'] %}
+  {% set weather_iv_custom = weather_iv not in weather_iv_presets %}
+  {% set weather_iv_custom_value = weather_iv if weather_iv_custom else '2' %}
+
   <div class="settings-layout">
     <div>
       <form id="settings-form">
@@ -88,14 +97,28 @@
               freie Position das Widget in der Vorschau direkt verschieben.
             </div>
 
-            <div class="checkbox-line">
-              <input type="checkbox" id="clock_interstitial" name="clock_interstitial" {{ 'checked' if settings.clock_interstitial == 'true' }}>
-              <label for="clock_interstitial">Uhr-Ansicht zwischen den Medien zeigen</label>
+            <div class="field">
+              <label for="clock_interval">Uhr-Ansicht anzeigen nach</label>
+              <select id="clock_interval" name="clock_interval">
+                <option value="1" {{ 'selected' if clock_iv == '1' }}>Nach jeder Folie</option>
+                <option value="2" {{ 'selected' if clock_iv == '2' }}>Alle 2 Folien</option>
+                <option value="3" {{ 'selected' if clock_iv == '3' }}>Alle 3 Folien</option>
+                <option value="5" {{ 'selected' if clock_iv == '5' }}>Alle 5 Folien</option>
+                <option value="10" {{ 'selected' if clock_iv == '10' }}>Alle 10 Folien</option>
+                <option value="custom" {{ 'selected' if clock_iv_custom }}>Benutzerdefiniert …</option>
+                <option value="off" {{ 'selected' if clock_iv == 'off' }}>Aus</option>
+              </select>
+              <div class="hint">
+                Zeigt die große Uhr-Ansicht nach jeder N-ten Folie (Bild/Video) –
+                auch wenn das Uhr-Widget ausgeschaltet ist. „Aus“ blendet die
+                große Uhr-Ansicht nie ein.
+              </div>
             </div>
-            <div class="hint">
-              Erscheint als eigener Zeitpunkt zwischen den Medien – auch wenn das
-              Uhr-Widget ausgeschaltet ist. Das kleine Uhr-Widget während der
-              Medien wird weiterhin über den Schalter oben gesteuert.
+
+            <div class="field" id="clock_interval_custom_field" {{ 'style="display:none"' if not clock_iv_custom }}>
+              <label for="clock_interval_custom">Alle N Folien (N)</label>
+              <input type="number" id="clock_interval_custom" name="clock_interval_custom" min="1" max="999" step="1" value="{{ clock_iv_custom_value }}">
+              <div class="hint">1 = nach jeder Folie – beliebige Werte wie 4, 7, 12 oder 20.</div>
             </div>
 
             <!-- Position wird nur per Drag &amp; Drop in der Vorschau gesetzt -->
@@ -149,14 +172,28 @@
               <span class="slider-value" id="weather_big_size_pct_val">{{ settings.weather_big_size_pct }}%</span>
             </div>
 
-            <div class="checkbox-line">
-              <input type="checkbox" id="weather_interstitial" name="weather_interstitial" {{ 'checked' if settings.weather_interstitial == 'true' }}>
-              <label for="weather_interstitial">Große Wetter-Ansicht zwischen den Medien zeigen</label>
+            <div class="field">
+              <label for="weather_interval">Wetter-Ansicht anzeigen nach</label>
+              <select id="weather_interval" name="weather_interval">
+                <option value="1" {{ 'selected' if weather_iv == '1' }}>Nach jeder Folie</option>
+                <option value="2" {{ 'selected' if weather_iv == '2' }}>Alle 2 Folien</option>
+                <option value="3" {{ 'selected' if weather_iv == '3' }}>Alle 3 Folien</option>
+                <option value="5" {{ 'selected' if weather_iv == '5' }}>Alle 5 Folien</option>
+                <option value="10" {{ 'selected' if weather_iv == '10' }}>Alle 10 Folien</option>
+                <option value="custom" {{ 'selected' if weather_iv_custom }}>Benutzerdefiniert …</option>
+                <option value="off" {{ 'selected' if weather_iv == 'off' }}>Aus</option>
+              </select>
+              <div class="hint">
+                Zeigt die große Wetter-Ansicht nach jeder N-ten Folie (Bild/Video) –
+                auch wenn das Wetter-Widget ausgeschaltet ist. „Aus“ blendet die
+                große Wetter-Ansicht nie ein.
+              </div>
             </div>
-            <div class="hint">
-              Erscheint als eigener Zeitpunkt zwischen den Medien – auch wenn das
-              Wetter-Widget ausgeschaltet ist. Das kleine Wetter-Widget während
-              der Medien wird weiterhin über den Schalter oben gesteuert.
+
+            <div class="field" id="weather_interval_custom_field" {{ 'style="display:none"' if not weather_iv_custom }}>
+              <label for="weather_interval_custom">Alle N Folien (N)</label>
+              <input type="number" id="weather_interval_custom" name="weather_interval_custom" min="1" max="999" step="1" value="{{ weather_iv_custom_value }}">
+              <div class="hint">1 = nach jeder Folie – beliebige Werte wie 4, 7, 12 oder 20.</div>
             </div>
 
             <div class="segmented" id="weather_mode_seg">

@@ -31,10 +31,25 @@ def _ensure_directories() -> None:
 
 
 def _seed_default_settings() -> None:
-    """Stellt sicher, dass alle Standard-Einstellungen existieren."""
+    """Stellt sicher, dass alle Standard-Einstellungen existieren.
+
+    Migriert die früheren booleschen Zwischenansicht-Schalter
+    (clock_interstitial / weather_interstitial) in die neuen
+    Folien-Intervallwerte: „true“ -> 1 (nach jeder Folie), „false“ -> off.
+    """
+    interval_migrations = {
+        "clock_interval": "clock_interstitial",
+        "weather_interval": "weather_interstitial",
+    }
     for key, value in Config.DEFAULT_SETTINGS.items():
-        if db.session.get(Setting, key) is None:
-            db.session.add(Setting(key=key, value=value))
+        if db.session.get(Setting, key) is not None:
+            continue
+        old_key = interval_migrations.get(key)
+        if old_key:
+            old = db.session.get(Setting, old_key)
+            if old is not None:
+                value = "1" if old.value == "true" else "off"
+        db.session.add(Setting(key=key, value=value))
     db.session.commit()
 
 
