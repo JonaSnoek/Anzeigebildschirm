@@ -67,6 +67,18 @@ function toast(message, type) {
   setTimeout(() => { el.classList.remove("show"); setTimeout(() => el.remove(), 300); }, 3500);
 }
 
+/* ---------- Seitenleiste ein-/ausklappen (wird gemerkt) ---------- */
+const sidebarToggle = document.getElementById("sidebar-toggle");
+const appLayout = document.querySelector(".layout");
+if (sidebarToggle && appLayout) {
+  const KEY = "sidebar-collapsed";
+  if (localStorage.getItem(KEY) === "1") appLayout.classList.add("sidebar-collapsed");
+  sidebarToggle.addEventListener("click", () => {
+    appLayout.classList.toggle("sidebar-collapsed");
+    localStorage.setItem(KEY, appLayout.classList.contains("sidebar-collapsed") ? "1" : "0");
+  });
+}
+
 /* ---------- Modal (Vorschau) ---------- */
 function openModal(html) {
   const overlay = document.createElement("div");
@@ -120,6 +132,7 @@ if (mediaPage) {
     eye: '<svg viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7zM12 15a3 3 0 100-6 3 3 0 000 6z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     edit: '<svg viewBox="0 0 24 24"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4L16.5 3.5z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     duplicate: '<svg viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 15V5a2 2 0 012-2h10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    more: '<svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.7" fill="currentColor"/><circle cx="12" cy="12" r="1.7" fill="currentColor"/><circle cx="19" cy="12" r="1.7" fill="currentColor"/></svg>',
   };
 
   async function loadList() {
@@ -151,7 +164,10 @@ if (mediaPage) {
       grid.innerHTML = '<div class="empty">Keine Dateien in dieser Kategorie.</div>';
       return;
     }
-    grid.innerHTML = items.map((m, i) => `
+    grid.innerHTML = items.map((m, i) => {
+      const first = i > 0;
+      const last = i < items.length - 1;
+      return `
       <div class="media-card ${m.active === false ? "inactive" : ""}" draggable="true" data-id="${m.id}">
         <div class="thumb">${thumb(m)}</div>
         <div class="media-card-body">
@@ -159,23 +175,36 @@ if (mediaPage) {
           <div class="sub">${fmtSize(m.size_bytes)} · ${fmtDate(m.created_at)}</div>
         </div>
         <div class="media-card-actions">
-          <div class="media-toggle" title="Im Anzeigebildschirm zeigen">
-            <label class="switch">
-              <input type="checkbox" data-action="toggle-active" ${m.active === false ? "" : "checked"}>
-              <span></span>
-            </label>
-            <span class="${m.active === false ? "off" : "on"}">${m.active === false ? "Aus" : "An"}</span>
+          <div class="media-actions-row">
+            <div class="media-toggle" title="Im Anzeigebildschirm zeigen">
+              <label class="switch">
+                <input type="checkbox" data-action="toggle-active" ${m.active === false ? "" : "checked"}>
+                <span></span>
+              </label>
+              <span class="${m.active === false ? "off" : "on"}">${m.active === false ? "Aus" : "An"}</span>
+            </div>
+            ${actionButton("preview", "Vorschau", SVG.eye)}
+            ${m.project_file ? actionButton("edit", "Ankündigungsbild bearbeiten", SVG.edit) : ""}
+            ${actionButton("more", "Weitere Aktionen", SVG.more)}
           </div>
-          ${i > 0 ? actionButton("up", "Nach oben", SVG.up) : ""}
-          ${i < items.length - 1 ? actionButton("down", "Nach unten", SVG.down) : ""}
-          ${actionButton("preview", "Vorschau", SVG.eye)}
-          ${m.project_file ? actionButton("edit", "Ankündigungsbild bearbeiten", SVG.edit) : ""}
-          ${actionButton("duplicate", "Duplizieren", SVG.duplicate)}
-          ${actionButton("rename", "Umbenennen", SVG.rename)}
-          ${actionButton("replace", "Ersetzen", SVG.replace)}
-          ${actionButton("delete", "Löschen", SVG.delete)}
+          <div class="media-more-menu">
+            <button class="media-more-item" data-action="up" ${first ? "" : "disabled"} title="Nach oben verschieben">${SVG.up}Nach oben</button>
+            <button class="media-more-item" data-action="down" ${last ? "" : "disabled"} title="Nach unten verschieben">${SVG.down}Nach unten</button>
+            <button class="media-more-item" data-action="duplicate" title="Duplizieren">${SVG.duplicate}Duplizieren</button>
+            <button class="media-more-item" data-action="rename" title="Umbenennen">${SVG.rename}Umbenennen</button>
+            <button class="media-more-item" data-action="replace" title="Ersetzen">${SVG.replace}Ersetzen</button>
+            <button class="media-more-item media-more-danger" data-action="delete" title="Löschen">${SVG.delete}Löschen</button>
+          </div>
         </div>
-      </div>`).join("");
+      </div>`;
+    }).join("");
+  }
+
+  function closeMoreMenus(except) {
+    grid.querySelectorAll(".media-card.menu-open").forEach((el) => {
+      if (except && el === except) return;
+      el.classList.remove("menu-open");
+    });
   }
 
   function saveOrder() {
@@ -228,6 +257,12 @@ if (mediaPage) {
       const item = items.find((x) => x.id === id);
       const action = btn.dataset.action;
 
+      if (action === "more") {
+        closeMoreMenus(card);
+        card.classList.toggle("menu-open");
+        return;
+      }
+
       try {
         if (action === "preview") {
           const inner = item.type === "image"
@@ -238,6 +273,7 @@ if (mediaPage) {
           openModal(inner);
         } else if (action === "edit") {
           window.location.href = `/admin/announcements/${id}/edit`;
+          return;
         } else if (action === "duplicate") {
           const data = await api(`/api/media/${id}/duplicate`, { method: "POST" });
           toast(`Dupliziert: ${data.item ? data.item.name : "Kopie"}`, "ok");
@@ -285,6 +321,13 @@ if (mediaPage) {
       } catch (err) {
         toast(err.message, "error");
       }
+      closeMoreMenus();
+    });
+
+    // Menü schließen, wenn außerhalb geklickt wird
+    document.addEventListener("click", (e) => {
+      if (e.target.closest(".media-card")) return;
+      closeMoreMenus();
     });
   }
 

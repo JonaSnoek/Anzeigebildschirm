@@ -6,39 +6,41 @@
 <div id="users-page">
   <h1>Benutzerverwaltung</h1>
 
-  <div class="card">
-    <h2>Neuer Benutzer</h2>
-    <form id="user-create-form">
-      <div class="field">
-        <label for="username">Benutzername</label>
-        <input type="text" id="username" name="username" minlength="3" maxlength="64" required>
-      </div>
-      <div class="field">
-        <label for="password">Passwort (mindestens 6 Zeichen)</label>
-        <input type="password" id="password" name="password" minlength="6" required>
-      </div>
-      <div class="field">
-        <label for="role">Rolle</label>
-        <select id="role" name="role">
-          <option value="viewer">Viewer – nur Dashboard ansehen</option>
-          <option value="editor">Editor – Medien verwalten</option>
-          <option value="admin">Administrator – voller Zugriff</option>
-        </select>
-      </div>
-      <button type="submit" class="btn btn-primary">Benutzer anlegen</button>
-      <span id="user-create-status" class="status"></span>
-    </form>
-  </div>
+  <div class="users-layout">
+    <div class="card">
+      <h2>Neuer Benutzer</h2>
+      <form id="user-create-form">
+        <div class="field">
+          <label for="username">Benutzername</label>
+          <input type="text" id="username" name="username" minlength="3" maxlength="64" required>
+        </div>
+        <div class="field">
+          <label for="password">Passwort (mindestens 6 Zeichen)</label>
+          <input type="password" id="password" name="password" minlength="6" required>
+        </div>
+        <div class="field">
+          <label for="role">Rolle</label>
+          <select id="role" name="role">
+            <option value="viewer">Viewer – nur Dashboard ansehen</option>
+            <option value="editor">Editor – Medien verwalten</option>
+            <option value="admin">Administrator – voller Zugriff</option>
+          </select>
+        </div>
+        <button type="submit" class="btn btn-primary">Benutzer anlegen</button>
+        <span id="user-create-status" class="status"></span>
+      </form>
+    </div>
 
-  <div class="card">
-    <h2>Vorhandene Benutzer</h2>
-    <div class="table-wrap">
-      <table class="table">
-        <thead>
-          <tr><th>Benutzername</th><th>Rolle</th><th>Aktiv</th><th>Erstellt</th><th>Aktionen</th></tr>
-        </thead>
-        <tbody id="users-tbody"></tbody>
-      </table>
+    <div class="card">
+      <h2>Vorhandene Benutzer</h2>
+      <div class="table-wrap">
+        <table class="table">
+          <thead>
+            <tr><th>Benutzername</th><th>Rolle</th><th>Aktiv</th><th>Erstellt</th><th>Aktionen</th></tr>
+          </thead>
+          <tbody id="users-tbody"></tbody>
+        </table>
+      </div>
     </div>
   </div>
 </div>

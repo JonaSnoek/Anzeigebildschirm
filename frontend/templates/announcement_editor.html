@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% set active = "media" %}
+{% block body_class %}editor-page{% endblock %}
 {% block title %}{{ 'Ankündigungsbild bearbeiten' if media_id else 'Neues Ankündigungsbild' }} · {{ site_name }}{% endblock %}
 {% block extra_head %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/announcement_editor.css') }}">

@@ -97,7 +97,11 @@ h2 { font-size: 1.1rem; font-weight: 600; margin: 0 0 .75rem; }
   gap: .55rem;
 }
 
-.content { flex: 1; padding: 2rem 2.2rem 3rem; max-width: 1200px; }
+.content {
+  flex: 1;
+  width: 100%;
+  padding: clamp(1.1rem, 2.2vw, 2rem) clamp(1.2rem, 3.2vw, 2.8rem) 3rem;
+}
 
 /* ---------- Buttons ---------- */
 .btn {
@@ -287,8 +291,8 @@ input[type=range] { width: 100%; max-width: 420px; accent-color: var(--accent); 
 /* ---------- Medien-Grid ---------- */
 .media-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 1rem;
+  grid-template-columns: repeat(auto-fill, minmax(min(250px, 100%), 1fr));
+  gap: 1.1rem;
 }
 
 .media-card {
@@ -328,7 +332,21 @@ input[type=range] { width: 100%; max-width: 420px; accent-color: var(--accent); 
 
 .media-card-body .sub { color: var(--muted); font-size: .78rem; margin-top: .15rem; }
 
-.media-card-actions { display: flex; gap: .3rem; padding: .5rem .7rem .7rem; }
+.media-card-actions { padding: .5rem .7rem .7rem; }
+
+.media-actions-row {
+  display: flex;
+  align-items: center;
+  gap: .3rem;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+}
+
+.media-actions-row .icon-btn,
+.media-actions-row .media-more {
+  flex-shrink: 0;
+}
 
 .icon-btn {
   background: none;
@@ -345,6 +363,41 @@ input[type=range] { width: 100%; max-width: 420px; accent-color: var(--accent); 
 
 .icon-btn:hover { color: var(--accent); border-color: var(--accent); }
 .icon-btn svg { width: 16px; height: 16px; }
+
+/* „Mehr“-Menü: erweitert sich innerhalb der Karte, damit alle Aktionen
+   unabhängig von Fenstergröße und Dateinamenlänge erreichbar bleiben. */
+.media-more-menu {
+  display: none;
+  flex-direction: column;
+  gap: .25rem;
+  padding-top: .55rem;
+}
+.media-card.menu-open .media-more-menu { display: flex; }
+
+.media-more-item {
+  display: flex;
+  align-items: center;
+  gap: .55rem;
+  width: 100%;
+  padding: .5rem .6rem;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  font-size: .83rem;
+  font-weight: 500;
+  cursor: pointer;
+  text-align: left;
+  transition: background .15s, border-color .15s, color .15s;
+}
+
+.media-more-item:hover { background: var(--panel-2); border-color: var(--accent); color: var(--accent); }
+.media-more-item:disabled { opacity: .45; cursor: not-allowed; }
+.media-more-item:disabled:hover { background: none; border-color: var(--border); color: var(--text); }
+.media-more-item svg { width: 15px; height: 15px; flex-shrink: 0; }
+.media-more-item.media-more-danger { color: var(--danger); }
+.media-more-item.media-more-danger:hover { border-color: var(--danger); color: var(--danger); background: rgba(248, 113, 113, .08); }
+.media-more-item.media-more-danger svg { color: var(--danger); }
 
 .empty { color: var(--muted); text-align: center; padding: 2.5rem 1rem; grid-column: 1 / -1; }
 
@@ -395,10 +448,36 @@ input[type=range] { width: 100%; max-width: 420px; accent-color: var(--accent); 
 /* ---------- Einstellungen: Layout + Live-Vorschau ---------- */
 .settings-layout {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 1.5rem;
   align-items: start;
 }
+
+/* Auf sehr breiten Bildschirmen bekommt die Live-Vorschau mehr Platz. */
+@media (min-width: 1500px) {
+  .settings-layout { grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); }
+  input[type=text], input[type=password], input[type=number], select {
+    max-width: 560px;
+  }
+}
+
+/* ---------- Dashboard: Anzeige + letzte Uploads ---------- */
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
+  gap: 1.5rem;
+  align-items: start;
+}
+.dashboard-grid .card { margin-bottom: 0; }
+
+/* ---------- Benutzer: Formular + Tabelle ---------- */
+.users-layout {
+  display: grid;
+  grid-template-columns: minmax(340px, 380px) minmax(0, 1fr);
+  gap: 1.5rem;
+  align-items: start;
+}
+.users-layout .card { margin-bottom: 0; }
 
 .separator {
   border: none;
@@ -406,7 +485,7 @@ input[type=range] { width: 100%; max-width: 420px; accent-color: var(--accent); 
   margin: 1.4rem 0;
 }
 
-.row-btns { display: flex; align-items: center; gap: .6rem; margin: .4rem 0 .9rem; }
+.row-btns { display: flex; align-items: center; gap: .6rem; margin: .4rem 0 .9rem; flex-wrap: wrap; }
 
 .manual-form { margin-top: .4rem; }
 
@@ -580,6 +659,17 @@ input[type="range"].slider::-moz-range-track { background: transparent; }
    (Klassen .clock-screen, .widget-clock, .widget-weather), damit die
    Vorschau exakt dem echten Display entspricht. */
 
+/* ---------- Medien: Upload-Formular (kompakt, nebeneinander) ---------- */
+.media-upload-form {
+  display: flex;
+  align-items: center;
+  gap: .8rem;
+  flex-wrap: wrap;
+}
+.media-upload-form .field { margin-bottom: 0; flex: 1 1 260px; min-width: 0; }
+.media-upload-form input[type=file] { max-width: none; }
+.media-upload-form .status { margin-left: 0; }
+
 /* ---------- Medien: Ein/Aus-Schalter ---------- */
 .media-card.inactive .thumb,
 .media-card.inactive .media-card-body { opacity: .45; }
@@ -590,6 +680,7 @@ input[type="range"].slider::-moz-range-track { background: transparent; }
 }
 
 .media-card-actions .switch { margin-right: auto; }
+.media-actions-row .media-toggle { margin-right: auto; }
 
 .media-toggle {
   display: flex;
@@ -712,9 +803,48 @@ input[type="range"].slider::-moz-range-track { background: transparent; }
 
 .login-submit { width: 100%; justify-content: center; margin-top: .4rem; }
 
+/* ---------- Einklappbare Seitenleiste ---------- */
+.sidebar-toggle {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  border-radius: 9px;
+  cursor: pointer;
+  width: 100%;
+  padding: .5rem .7rem;
+  display: flex;
+  align-items: center;
+  gap: .7rem;
+  font-size: .85rem;
+  font-weight: 500;
+}
+.sidebar-toggle:hover { color: var(--accent); border-color: var(--accent); }
+.sidebar-toggle svg { width: 17px; height: 17px; flex-shrink: 0; }
+.sidebar-toggle .toggle-caption { flex: 1; text-align: left; }
+.sidebar-toggle .toggle-chev { transition: transform .2s; }
+
+.layout.sidebar-collapsed .sidebar { width: 64px; }
+.layout.sidebar-collapsed .brand { justify-content: center; padding: 1.2rem .5rem; }
+.layout.sidebar-collapsed .brand-text { display: none; }
+.layout.sidebar-collapsed .sidebar nav a { justify-content: center; padding: .68rem 0; }
+.layout.sidebar-collapsed .sidebar nav a span,
+.layout.sidebar-collapsed .sidebar-footer span,
+.layout.sidebar-collapsed .sidebar-footer a span,
+.layout.sidebar-collapsed .sidebar-footer button span { display: none; }
+.layout.sidebar-collapsed .sidebar-footer .link-btn { justify-content: center; width: 100%; }
+.layout.sidebar-collapsed .sidebar-toggle .toggle-caption { display: none; }
+.layout.sidebar-collapsed .sidebar-toggle .toggle-chev { transform: rotate(180deg); }
+.layout.sidebar-collapsed .sidebar-toggle { justify-content: center; padding: .5rem; }
+
 /* ---------- Responsive ---------- */
+@media (max-width: 1000px) {
+  .dashboard-grid { grid-template-columns: 1fr; }
+  .users-layout { grid-template-columns: 1fr; }
+}
+
 @media (max-width: 900px) {
   .sidebar { width: 64px; }
+  .sidebar-toggle { display: none; }
   .brand { font-size: 0; padding: 1.2rem; justify-content: center; }
   .sidebar nav a { justify-content: center; }
   .sidebar nav a span, .sidebar-footer span { display: none; }
@@ -723,6 +853,7 @@ input[type="range"].slider::-moz-range-track { background: transparent; }
 
 @media (max-width: 640px) {
   .layout { flex-direction: column; }
+  .layout.sidebar-collapsed .sidebar { width: 100%; }
   .sidebar {
     width: 100%;
     height: auto;
@@ -757,7 +888,6 @@ input[type="range"].slider::-moz-range-track { background: transparent; }
   h1 { font-size: 1.3rem; }
   .card { padding: 1.1rem; }
   .modal-overlay { padding: 1rem; }
-  .media-card-actions { flex-wrap: wrap; }
 }
 
 @media (max-width: 480px) {

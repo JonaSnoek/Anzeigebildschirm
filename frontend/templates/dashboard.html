@@ -38,60 +38,62 @@
     </div>
   </div>
 
-  <div class="card">
-    <h2>Aktuelle Anzeige</h2>
-    <div class="display-summary">
-      <div class="chip"><span class="dot"></span>Uhr:
-        {% if stats.settings.clock_enabled == 'true' %}
-          {{ stats.settings.clock_size_pct }} %
-          ({{ 'manuell' if stats.settings.clock_mode == 'custom' else 'automatisch' }})
-          {% if stats.settings.clock_interstitial == 'true' %} · Zwischenansicht{% endif %}
-        {% else %}aus{% endif %}
+  <div class="dashboard-grid">
+    <div class="card">
+      <h2>Aktuelle Anzeige</h2>
+      <div class="display-summary">
+        <div class="chip"><span class="dot"></span>Uhr:
+          {% if stats.settings.clock_enabled == 'true' %}
+            {{ stats.settings.clock_size_pct }} %
+            ({{ 'manuell' if stats.settings.clock_mode == 'custom' else 'automatisch' }})
+            {% if stats.settings.clock_interstitial == 'true' %} · Zwischenansicht{% endif %}
+          {% else %}aus{% endif %}
+        </div>
+        <div class="chip"><span class="dot"></span>Wetter:
+          {% if stats.settings.weather_enabled == 'true' %}
+            {{ stats.settings.weather_city or '–' }}
+            ({{ 'groß' if stats.settings.weather_display == 'large' else 'klein' }},
+            {{ stats.settings.weather_size_pct }} %,
+            {{ 'manuell' if stats.settings.weather_mode == 'custom' else 'automatisch' }})
+          {% else %}aus{% endif %}
+        </div>
+        <div class="chip"><span class="dot"></span>Medien:
+          {{ stats.active_media }} von {{ stats.images + stats.videos + stats.audio }} aktiv
+        </div>
       </div>
-      <div class="chip"><span class="dot"></span>Wetter:
-        {% if stats.settings.weather_enabled == 'true' %}
-          {{ stats.settings.weather_city or '–' }}
-          ({{ 'groß' if stats.settings.weather_display == 'large' else 'klein' }},
-          {{ stats.settings.weather_size_pct }} %,
-          {{ 'manuell' if stats.settings.weather_mode == 'custom' else 'automatisch' }})
-        {% else %}aus{% endif %}
+      <div class="preview-iframe-wrap">
+        <iframe src="{{ url_for('public.display') }}" class="preview-iframe"
+                title="Live-Vorschau des Anzeigebildschirms"></iframe>
       </div>
-      <div class="chip"><span class="dot"></span>Medien:
-        {{ stats.active_media }} von {{ stats.images + stats.videos + stats.audio }} aktiv
+      <div class="row-btns">
+        <a href="{{ url_for('public.display') }}" target="_blank" rel="noopener" class="btn">Vollbild öffnen ↗</a>
+        <a href="{{ url_for('settings.page') }}" class="btn">Anzeige konfigurieren</a>
       </div>
     </div>
-    <div class="preview-iframe-wrap">
-      <iframe src="{{ url_for('public.display') }}" class="preview-iframe"
-              title="Live-Vorschau des Anzeigebildschirms"></iframe>
-    </div>
-    <div class="row-btns">
-      <a href="{{ url_for('public.display') }}" target="_blank" rel="noopener" class="btn">Vollbild öffnen ↗</a>
-      <a href="{{ url_for('settings.page') }}" class="btn">Anzeige konfigurieren</a>
-    </div>
-  </div>
 
-  <div class="card">
-    <h2>Letzte Uploads</h2>
-    {% if stats.last_uploads %}
-    <div class="table-wrap">
-    <table class="table">
-      <thead>
-        <tr><th>Name</th><th>Typ</th><th>Größe</th><th>Datum</th></tr>
-      </thead>
-      <tbody>
-        {% for media in stats.last_uploads %}
-        <tr>
-          <td>{{ media.name }}</td>
-          <td>{{ media.type }}</td>
-          <td>{{ stats.human_size(media.size_bytes) }}</td>
-          <td>{{ media.created_at.strftime("%d.%m.%Y %H:%M") if media.created_at else "-" }}</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+    <div class="card">
+      <h2>Letzte Uploads</h2>
+      {% if stats.last_uploads %}
+      <div class="table-wrap">
+      <table class="table">
+        <thead>
+          <tr><th>Name</th><th>Typ</th><th>Größe</th><th>Datum</th></tr>
+        </thead>
+        <tbody>
+          {% for media in stats.last_uploads %}
+          <tr>
+            <td>{{ media.name }}</td>
+            <td>{{ media.type }}</td>
+            <td>{{ stats.human_size(media.size_bytes) }}</td>
+            <td>{{ media.created_at.strftime("%d.%m.%Y %H:%M") if media.created_at else "-" }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      </div>
+      {% else %}
+        <p class="empty">Noch keine Medien hochgeladen.</p>
+      {% endif %}
     </div>
-    {% else %}
-      <p class="empty">Noch keine Medien hochgeladen.</p>
-    {% endif %}
   </div>
 {% endblock %}

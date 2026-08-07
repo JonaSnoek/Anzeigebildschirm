@@ -16,7 +16,7 @@
       Videos: {{ allowed.video | join(", ") }} (max. {{ max_sizes.video }}&nbsp;MB) ·
       Audio: {{ allowed.audio | join(", ") }} (max. {{ max_sizes.audio }}&nbsp;MB)
     </p>
-    <form id="upload-form">
+    <form id="upload-form" class="media-upload-form">
       <div class="field">
         <input type="file" id="upload-input" multiple
                accept="{{ allowed.image | join(',') }},{{ allowed.video | join(',') }},{{ allowed.audio | join(',') }}">
