@@ -21,6 +21,8 @@ body {
 /* ---------- Medien-Ebene ---------- */
 #player { position: fixed; inset: 0; }
 
+#widget-layer { position: fixed; z-index: 40; }
+
 .layer {
   position: absolute;
   inset: 0;

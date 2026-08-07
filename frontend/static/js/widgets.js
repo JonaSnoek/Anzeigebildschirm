@@ -209,6 +209,86 @@ window.Signage = (function () {
       </div>`;
   }
 
+  /*
+   * HTML-Widgets (Ankündigungsbilder): Rendering und Aktualisierung für
+   * Display und Live-Vorschau. Jedes Widget wird in einem isolierten iframe
+   * gerendert (beliebiger HTML-/CSS-/JavaScript-Code). Position, Größe und
+   * Drehung kommen aus dem Projekt (1920×1080-Koordinaten); die Positionierung
+   * erfolgt relativ zur "content box" des Bildes (object-fit: contain).
+   *
+   * Item-Form: { x, y, w, h, rotation, opacity, html, refresh, interval }.
+   * Aktualisierung: neues iframe unsichtbar erzeugen, nach dem Laden
+   * umschalten (kein Flackern, kein weißer Bildschirm).
+   */
+  const HtmlWidgets = (function () {
+    const toNum = (v, d) => (typeof v === "number" && isFinite(v) ? v : d);
+    const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+
+    function contentBox(width, height, container) {
+      const cw = container ? (container.clientWidth || container.getBoundingClientRect().width) : window.innerWidth;
+      const ch = container ? (container.clientHeight || container.getBoundingClientRect().height) : window.innerHeight;
+      const w = toNum(width, 1920), h = toNum(height, 1080);
+      const scale = Math.min(cw / w, ch / h);
+      return { left: (cw - w * scale) / 2, top: (ch - h * scale) / 2, scale: scale };
+    }
+
+    function place(node, item, box) {
+      const b = box || { left: 0, top: 0, scale: 1 };
+      node.style.left = (b.left + toNum(item.x, 0) * b.scale) + "px";
+      node.style.top = (b.top + toNum(item.y, 0) * b.scale) + "px";
+      node.style.width = (toNum(item.w, 0) * b.scale) + "px";
+      node.style.height = (toNum(item.h, 0) * b.scale) + "px";
+      node.style.transform = "rotate(" + toNum(item.rotation, 0) + "deg)";
+      node.style.opacity = String(clamp(toNum(item.opacity, 1), 0, 1));
+    }
+
+    function frame(item) {
+      const f = document.createElement("iframe");
+      f.className = "hw-frame";
+      f.setAttribute("scrolling", "no");
+      f.setAttribute("frameborder", "0");
+      f.srcdoc = item.html == null ? "" : String(item.html);
+      return f;
+    }
+
+    function createNode(item, box) {
+      const root = document.createElement("div");
+      root.className = "hw";
+      root._frame = frame(item);
+      root.appendChild(root._frame);
+      place(root, item, box);
+      return root;
+    }
+
+    /* Flackerfreie Aktualisierung: neues iframe unsichtbar darüber legen,
+       nach dem Laden (oder spätestens nach 8 s) umschalten. */
+    function refresh(node, item) {
+      const old = node._frame;
+      const fresh = frame(item);
+      fresh.style.opacity = "0";
+      node.appendChild(fresh);
+      node._frame = fresh;
+      let done = false;
+      const swap = () => {
+        if (done) return;
+        done = true;
+        if (old && old.parentNode === node) node.removeChild(old);
+        fresh.style.opacity = "1";
+      };
+      fresh.addEventListener("load", swap, { once: true });
+      setTimeout(swap, 8000);
+    }
+
+    /* Startet den Aktualisierungs-Timer eines Widgets (falls aktiviert). */
+    function startTimer(item, node) {
+      if (item.refresh === false) return null;
+      const ms = clamp(Math.round(toNum(item.interval, 5)), 1, 1440) * 60 * 1000;
+      return setInterval(() => refresh(node, item), ms);
+    }
+
+    return { contentBox, createNode, place, refresh, startTimer };
+  })();
+
   return {
     WEATHER_ICONS,
     WEATHER_STATES,
@@ -220,5 +300,6 @@ window.Signage = (function () {
     formatTime,
     formatDate,
     weatherMarkup,
+    HtmlWidgets,
   };
 })();

@@ -599,7 +599,47 @@ if (settingsForm) {
 
     updatePreviewClock();
     updateLiveMedia();
+    updateHtmlWidgets();
     updateSliderFill();
+  }
+
+  /* HTML-Widgets in der Live-Vorschau (gleiche Render-Engine wie Display).
+     Der Container (#preview-screen) hat exakt das 16:9-Format der Leinwand,
+     dadurch deckt die Content-Box das Medium exakt ab. */
+  let previewWidgetTimers = [];
+  let liveWidgetSig = null;
+  let previewWidgets = [];
+  function stopPreviewWidgetTimers() {
+    previewWidgetTimers.forEach((t) => clearInterval(t));
+    previewWidgetTimers = [];
+  }
+
+  function updateHtmlWidgets() {
+    const layer = document.getElementById("preview-html-widgets");
+    if (!layer) return;
+    const slot = previewContext.value === "media" ? liveSlotState : null;
+    const cfg = slot && slot.widgets ? slot.widgets : null;
+    const sig = cfg ? slot.id + ":" + JSON.stringify(cfg) : null;
+    if (sig === liveWidgetSig) {
+      if (cfg) {
+        const box = Signage.HtmlWidgets.contentBox(Number(cfg.width) || 1920, Number(cfg.height) || 1080, previewScreen);
+        previewWidgets.forEach((w) => Signage.HtmlWidgets.place(w.node, w.item, box));
+      }
+      return;
+    }
+    liveWidgetSig = sig;
+    stopPreviewWidgetTimers();
+    layer.innerHTML = "";
+    previewWidgets = [];
+    if (!cfg || !cfg.items || !cfg.items.length) return;
+    const box = Signage.HtmlWidgets.contentBox(Number(cfg.width) || 1920, Number(cfg.height) || 1080, previewScreen);
+    for (const item of cfg.items) {
+      const node = Signage.HtmlWidgets.createNode(item, box);
+      layer.appendChild(node);
+      previewWidgets.push({ node, item });
+      const timer = Signage.HtmlWidgets.startTimer(item, node);
+      if (timer !== null) previewWidgetTimers.push(timer);
+    }
   }
 
   /* ---------- Live-Medien (SSE, identisch mit Display) ---------- */
@@ -778,7 +818,7 @@ if (settingsForm) {
     el.addEventListener("input", renderPreview);
     el.addEventListener("change", renderPreview);
   });
-  window.addEventListener("resize", syncPreviewSize);
+  window.addEventListener("resize", renderPreview);
 
   updatePreviewClock();
   setInterval(updatePreviewClock, 1000);

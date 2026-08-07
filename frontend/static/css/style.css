@@ -655,6 +655,9 @@ input[type="range"].slider::-moz-range-track { background: transparent; }
   object-fit: contain;
 }
 
+/* HTML-Widgets in der Live-Vorschau über dem Medium (identisch zum Display) */
+#preview-html-widgets { z-index: 3; }
+
 /* Vorschau-Widgets verwenden die identischen Styles aus widgets.css
    (Klassen .clock-screen, .widget-clock, .widget-weather), damit die
    Vorschau exakt dem echten Display entspricht. */

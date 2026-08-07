@@ -27,6 +27,7 @@
   const WEATHER = document.getElementById("weather-widget");
   const AUDIO = document.getElementById("bg-audio");
   const LANG_BTN = document.getElementById("lang-toggle");
+  const WIDGET_LAYER = document.getElementById("widget-layer");
 
   const LANGS = Signage.LANGS;
 
@@ -60,6 +61,49 @@
   let source = null;
 
   const nowSec = () => Date.now() / 1000 + skew;
+
+  const num = (v, d) => (typeof v === "number" && isFinite(v) ? v : d);
+
+  /* HTML-Widgets (Overlay über dem Ankündigungsbild). */
+  let widgetNodes = [];
+  let widgetTimers = [];
+  let lastWidgetSig = null;
+
+  function stopWidgetTimers() {
+    widgetTimers.forEach((t) => clearInterval(t));
+    widgetTimers = [];
+  }
+
+  /* Zeichnet die HTML-Widgets des aktuellen Bildes. Wird bei jedem Slot-/
+     Zustandswechsel sowie bei Fenstergrößenänderung aufgerufen. */
+  function applyHtmlWidgets() {
+    if (!WIDGET_LAYER) return;
+    const slot = currentSlotRef;
+    const cfg = slot && slot.widgets ? slot.widgets : null;
+    const sig = cfg ? slot.id + ":" + JSON.stringify(cfg) : null;
+    if (sig === lastWidgetSig) {
+      // Nur neu positionieren (z. B. nach Resize) – Widgets NICHT neu laden.
+      if (cfg) {
+        const box = Signage.HtmlWidgets.contentBox(num(cfg.width, 1920), num(cfg.height, 1080));
+        widgetNodes.forEach((w) => Signage.HtmlWidgets.place(w.node, w.item, box));
+      }
+      return;
+    }
+    lastWidgetSig = sig;
+    stopWidgetTimers();
+    WIDGET_LAYER.innerHTML = "";
+    widgetNodes = [];
+    if (!cfg || !cfg.items || !cfg.items.length) return;
+    if (currentKey !== "image:" + slot.id) return;
+    const box = Signage.HtmlWidgets.contentBox(num(cfg.width, 1920), num(cfg.height, 1080));
+    for (const item of cfg.items) {
+      const node = Signage.HtmlWidgets.createNode(item, box);
+      WIDGET_LAYER.appendChild(node);
+      widgetNodes.push({ node, item });
+      const timer = Signage.HtmlWidgets.startTimer(item, node);
+      if (timer !== null) widgetTimers.push(timer);
+    }
+  }
 
   /* Lokalisierter Text eines Ankündigungsbildes (Wetter-Überschrift o. Ä.):
      Wert kann ein String sein (legacy) oder ein {de, en}-Objekt. */
@@ -345,6 +389,7 @@
     PLAYER.classList.add("hidden");
     applyClock();
     applyWeather();
+    applyHtmlWidgets();
   }
 
   // Eigene große Wetter-Ansicht (Wetter-Interstitial) – getrennt von der Uhr.
@@ -356,6 +401,7 @@
     PLAYER.classList.add("hidden");
     applyClock();
     applyWeather();
+    applyHtmlWidgets();
   }
 
   // Wetterseite eines Ankündigungsbildes: gleiches Design wie die große
@@ -369,6 +415,7 @@
     PLAYER.classList.add("hidden");
     applyClock();
     applyWeather();
+    applyHtmlWidgets();
   }
 
   function showSlot(slot) {
@@ -406,12 +453,14 @@
       // sofort übernommen werden (z. B. neue Uhrfarbe gespeichert).
       applyClock();
       applyWeather();
+      applyHtmlWidgets();
       return;
     }
     currentKey = key;
     PLAYER.classList.remove("hidden");
     applyClock();
     applyWeather();
+    applyHtmlWidgets();
     if (slot.type === "video") renderVideo(slot);
     else renderImage(slot);
   }
@@ -543,6 +592,7 @@
     updateClock();
     setInterval(updateClock, 1000);
     setInterval(tick, 500);
+    window.addEventListener("resize", applyHtmlWidgets);
 
     try {
       const res = await fetch("/api/display", { cache: "no-store" });

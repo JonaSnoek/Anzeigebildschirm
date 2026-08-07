@@ -42,6 +42,12 @@
   const canvas = document.getElementById("ann-canvas");
   const ctx = canvas.getContext("2d");
 
+  /* DOM-Overlay für HTML-Widgets: Die Leinwand kann kein HTML rendern,
+     daher werden HTML-Widgets als absolut positionierte iframes über der
+     Canvas gezeichnet (Position/Größe/Drehung = Canvas-Koordinaten × Zoom). */
+  const widgetLayer = document.getElementById("ae-widget-layer");
+  const widgetNodes = new Map();
+
   /* ------------------------------------------------------------------ *
    *  Helfer
    * ------------------------------------------------------------------ */
@@ -544,6 +550,16 @@
       id: uid(), type: "qrcode", x: 100, y: 100, w: 320, h: 320, rotation: 0, opacity: 1,
       url: "", color: "#0b1220", bg: "white", quietZone: true, ecc: "M",
     }, over || {});
+  }
+  function htmlEl(over) {
+    const o = over || {};
+    return Object.assign({
+      id: uid(), type: "html", x: 100, y: 100, w: 560, h: 300, rotation: 0, opacity: 1,
+      name: o.name != null ? String(o.name) : "HTML-Widget",
+      html: o.html != null ? String(o.html) : "",
+      refresh: o.refresh !== false,
+      interval: num(o.interval, 5),
+    }, o);
   }
 
   /* ------------------------------------------------------------------ *
@@ -1402,7 +1418,72 @@
       }
     }
     drawGuidesOn(ctx, guides);
+    renderWidgetOverlay();
     refreshInspectorValues();
+  }
+
+  /* HTML-Widget-Overlay synchron zur Canvas zeichnen. Beim Export (Speichern)
+     wird die Ebene ausgeblendet, damit das gerenderte PNG keine Widgets enthält
+     (diese legt erst das Display über das Bild). */
+  function widgetNode(el) {
+    let node = widgetNodes.get(el.id);
+    if (!node) {
+      node = document.createElement("div");
+      node.className = "ae-hw";
+      node._html = null;
+      const frame = document.createElement("iframe");
+      frame.className = "ae-hw-frame";
+      frame.setAttribute("scrolling", "no");
+      frame.setAttribute("frameborder", "0");
+      node.appendChild(frame);
+      node._frame = frame;
+      widgetNodes.set(el.id, node);
+    }
+    return node;
+  }
+
+  function syncWidgetNode(node, el) {
+    const html = el.html == null ? "" : String(el.html);
+    if (node._html !== html) {
+      node._html = html;
+      node._frame.srcdoc = html;
+    }
+  }
+
+  /* Beim Tippen im HTML-Editor wird das iframe erst nach einer kurzen Pause
+     neu geladen, damit die Vorschau bei längeren Snippets flüssig bleibt. */
+  let htmlRenderTimer = null;
+  function scheduleHtmlRender() {
+    clearTimeout(htmlRenderTimer);
+    htmlRenderTimer = setTimeout(() => render(), 350);
+  }
+
+  function renderWidgetOverlay() {
+    if (!widgetLayer) return;
+    widgetLayer.style.display = exporting ? "none" : "block";
+    if (exporting) return;
+    const z = view.zoom;
+    const seen = new Set();
+    for (const el of project.elements) {
+      if (el.type !== "html") continue;
+      seen.add(el.id);
+      const node = widgetNode(el);
+      node.style.left = (num(el.x, 0) * z) + "px";
+      node.style.top = (num(el.y, 0) * z) + "px";
+      node.style.width = (num(el.w, 0) * z) + "px";
+      node.style.height = (num(el.h, 0) * z) + "px";
+      node.style.transform = "rotate(" + num(el.rotation, 0) + "deg)";
+      node.style.opacity = String(clamp(num(el.opacity, 1), 0, 1));
+      node.classList.toggle("selected", el.id === selectedId);
+      if (!node.parentNode) widgetLayer.appendChild(node);
+      syncWidgetNode(node, el);
+    }
+    for (const [id, node] of widgetNodes) {
+      if (!seen.has(id)) {
+        node.remove();
+        widgetNodes.delete(id);
+      }
+    }
   }
 
   function drawMissingTranslation(c, el) {
@@ -1770,6 +1851,7 @@
     { type: "accent", label: "Akzentstreifen", svg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 10h16 M4 14h10"/></svg>' },
     { type: "weather", label: "Wetter-Widget", svg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 10.5a4 4 0 0 0-7.5-1.6A3.5 3.5 0 0 0 10 15h8a3.5 3.5 0 0 0 0-4.5zM9 6V4 M6.5 8.5L5 7 M6 13H4"/></svg>' },
     { type: "qrcode", label: "QR-Code", svg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3 M20 14v3 M14 20h3"/></svg>' },
+    { type: "html", label: "HTML-Widget", svg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6l-5 6 5 6M16 6l5 6-5 6M13.5 4.5l-3 15"/></svg>' },
   ];
 
   /* ------------------------------------------------------------------ *
@@ -1922,6 +2004,9 @@
       case "qrcode":
         el = qrcodeEl({ x: cw(340), y: ch(340), w: 340, h: 340, url: "https://", bg: "white", quietZone: true, color: "#0b1220" });
         break;
+      case "html":
+        el = htmlEl({ x: cw(560), y: ch(300), w: 560, h: 300 });
+        break;
       default:
         return;
     }
@@ -1971,10 +2056,10 @@
    *  Ebenen
    * ------------------------------------------------------------------ */
   const TYPE_LABELS = {
-    text: "Text", shape: "Form", image: "Bild", icon: "Icon", weather: "Wetter", qrcode: "QR-Code",
+    text: "Text", shape: "Form", image: "Bild", icon: "Icon", weather: "Wetter", qrcode: "QR-Code", html: "HTML-Widget",
   };
   const TYPE_ICON = {
-    text: "T", shape: "▭", image: iconSvg("camera", 14), icon: iconSvg("star", 14), weather: iconSvg("info", 14), qrcode: iconSvg("arrow", 14),
+    text: "T", shape: "▭", image: iconSvg("camera", 14), icon: iconSvg("star", 14), weather: iconSvg("info", 14), qrcode: iconSvg("arrow", 14), html: "<>",
   };
   function layerLabel(el) {
     if (el.type === "text") {
@@ -1989,6 +2074,10 @@
     if (el.type === "icon") return ICON_LABELS[el.icon] || "Icon";
     if (el.type === "weather") return "Wetter-Widget";
     if (el.type === "qrcode") return "QR-Code";
+    if (el.type === "html") {
+      const n = (el.name != null ? String(el.name) : "").trim();
+      return n || "HTML-Widget";
+    }
     return "Element";
   }
 
@@ -2088,6 +2177,7 @@
     else if (el.type === "shape") html += shapeControls(el);
     else if (el.type === "weather") html += weatherControls(el);
     else if (el.type === "qrcode") html += qrControls(el);
+    else if (el.type === "html") html += htmlControls(el);
 
     html += `<div class="ae-insp-sub">Position &amp; Größe</div>`;
     html += `<div class="ae-num-grid">
@@ -2307,12 +2397,29 @@
     return h;
   }
 
+  function htmlControls(el) {
+    let h = "";
+    h += inputRow("name", "Name", "HTML-Widget");
+    h += textRow("html", "HTML-Code", "<div>…</div>", 10);
+    h += `<div class="ae-hint">Beliebiger HTML-, CSS- und JavaScript-Code (z. B. Wetter, Countdown, Kalender, Karte). Die Vorschau zeigt den Code live.</div>`;
+    h += `<div class="ae-insp-sub">Aktualisierung</div>`;
+    h += checkRow("Automatische Aktualisierung", "refresh");
+    h += numField("interval", "Intervall (Min.)");
+    h += `<div class="ae-hint">Beim Anzeigen geladen, danach in diesem Intervall neu initialisiert – flackerfrei (Standard: 5 Minuten).</div>`;
+    return h;
+  }
+
   function wireInspector(el) {
     inspector.querySelectorAll("[data-bind]").forEach((inp) => {
       const path = inp.dataset.bind;
       const kind = inp.dataset.kind;
       const get = () => pathGet(el, path);
-      const set = (v) => { pathSet(el, path, v); render(); };
+      const set = (v) => {
+        pathSet(el, path, v);
+        if (path === "html") scheduleHtmlRender();
+        else render();
+        if (path === "name") renderLayers();
+      };
       const isColor = kind === "color";
       const isColorText = kind === "colortext";
       const isRange = kind === "range";
@@ -2421,6 +2528,16 @@
         if (l !== editorLang) setEditorLang(l);
       });
     });
+
+    // HTML-Widget: Intervall-Feld sperren, solange die automatische
+    // Aktualisierung deaktiviert ist.
+    const refreshChk = inspector.querySelector('[data-bind="refresh"]');
+    const intervalInp = inspector.querySelector('[data-bind="interval"]');
+    if (refreshChk && intervalInp) {
+      const sync = () => { intervalInp.disabled = !refreshChk.checked; };
+      sync();
+      refreshChk.addEventListener("change", sync);
+    }
   }
 
   function refreshInspectorValues() {
@@ -2644,6 +2761,7 @@
     canvas.style.width = (W * view.zoom) + "px";
     canvas.style.height = (H * view.zoom) + "px";
     if (zoomLabel) zoomLabel.textContent = Math.round(view.zoom * 100) + " %";
+    renderWidgetOverlay();
   }
   document.getElementById("ae-zoom-in").addEventListener("click", () => { view.zoom = clamp(view.zoom * 1.15, 0.05, 2); applyZoom(); });
   document.getElementById("ae-zoom-out").addEventListener("click", () => { view.zoom = clamp(view.zoom / 1.15, 0.05, 2); applyZoom(); });

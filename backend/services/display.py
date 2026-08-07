@@ -37,6 +37,39 @@ DEFAULT_VIDEO_DURATION = 15.0
 _cache: dict = {"signature": None, "cycle_start": 0.0}
 
 
+def _html_widgets(project: dict) -> dict | None:
+    """
+    Liefert die HTML-Widgets eines Projekts für die Anzeige:
+    `{width, height, items: [...]}` – oder None, wenn keine vorhanden sind.
+    Der HTML-Code wird vollständig mitgegeben; das Display rendert jedes
+    Widget in einem isolierten iframe (Refresh laut Intervall, Standard 5 Min).
+    """
+    elements = project.get("elements") or []
+    items = [el for el in elements if el.get("type") == "html"]
+    if not items:
+        return None
+    out_items = []
+    for el in items:
+        out_items.append({
+            "id": str(el.get("id") or ""),
+            "name": str(el.get("name") or "HTML-Widget"),
+            "x": el.get("x") if isinstance(el.get("x"), (int, float)) else 0,
+            "y": el.get("y") if isinstance(el.get("y"), (int, float)) else 0,
+            "w": el.get("w") if isinstance(el.get("w"), (int, float)) else 0,
+            "h": el.get("h") if isinstance(el.get("h"), (int, float)) else 0,
+            "rotation": el.get("rotation") if isinstance(el.get("rotation"), (int, float)) else 0,
+            "opacity": el.get("opacity") if isinstance(el.get("opacity"), (int, float)) else 1,
+            "html": str(el.get("html") or ""),
+            "refresh": el.get("refresh") is not False,
+            "interval": int(min(max(float(el.get("interval") or 5), 1), 1440)),
+        })
+    return {
+        "width": int(project.get("width") or 1920),
+        "height": int(project.get("height") or 1080),
+        "items": out_items,
+    }
+
+
 def _announcement_configs(items) -> dict:
     """
     Liefert je Ankündigungsbild dessen Einstellungen aus der Projektdatei:
@@ -67,6 +100,9 @@ def _announcement_configs(items) -> dict:
                 "shadow": clock.get("shadow") is not False,
             },
         }
+        widgets = _html_widgets(project)
+        if widgets:
+            entry["widgets"] = widgets
         if w.get("enabled") and location:
             entry["weather"] = {
                 "enabled": True,
@@ -159,6 +195,7 @@ def _timeline_slots(items, settings: dict, aw_configs: dict = None):
             },
             "duration": _item_duration(item, slide),
             "clock": config.get("clock") if config else None,
+            "widgets": config.get("widgets") if config else None,
         })
         # Direkt nach dem Ankündigungsbild dessen eigene Wetterseite einfügen.
         aw = announcement_weather_slot(item)
@@ -193,7 +230,7 @@ def _signature(items, settings: dict, aw_configs: dict = None) -> str:
         f"{m.id}:{m.duration or 0}:{m.sort_order}:{m.active}" for m in items
     )
     announce = ",".join(
-        f"{m_id}:{cfg.get('weather', {}).get('enabled')}:{cfg.get('weather', {}).get('location')}:{cfg.get('weather', {}).get('heading')}"
+        f"{m_id}:{cfg.get('weather', {}).get('enabled')}:{cfg.get('weather', {}).get('location')}:{cfg.get('weather', {}).get('heading')}:{cfg.get('widgets')}"
         for m_id, cfg in aw_configs.items()
     )
     return "|".join([
