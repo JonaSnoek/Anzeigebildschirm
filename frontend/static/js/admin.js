@@ -471,6 +471,9 @@ if (settingsForm) {
     const weather = widgetCfg("weather");
     const mode = previewMode();
     const idle = mode === "empty";
+    // Folien-Konfiguration der Uhr (aus dem Timeline-Slot des aktuell
+    // angezeigten Ankündigungsbildes) – wie auf dem echten Display.
+    const slotClock = liveSlotState && liveSlotState.clock ? liveSlotState.clock : null;
 
     // Große Uhr-Ansicht nur im Zustand "empty" (Uhr-Slot) – getrennt vom Wetter.
     // Unabhängig vom Widget-Schalter: sie erscheint, sobald das Interstitial
@@ -499,7 +502,14 @@ if (settingsForm) {
       previewClock.style.left = "";
       previewClock.style.top = "";
     }
-    previewClock.classList.toggle("hidden", mode !== "media" || !clock.enabled);
+    if (slotClock) {
+      previewClock.style.setProperty("--clock-color", slotClock.color || "#FFFFFF");
+      previewClock.style.setProperty("--clock-shadow", slotClock.shadow === false ? "none" : "0 2px 10px rgba(0,0,0,.9)");
+    } else {
+      previewClock.style.removeProperty("--clock-color");
+      previewClock.style.removeProperty("--clock-shadow");
+    }
+    previewClock.classList.toggle("hidden", mode !== "media" || !clock.enabled || (slotClock && slotClock.enabled === false));
 
     // Wetter: groß (Wetter-Interstitial) oder als Widget (während der Medien).
     // Im Zustand "empty" (große Uhr) ist das Wetter ausgeblendet.
@@ -516,7 +526,7 @@ if (settingsForm) {
       if (mode === "weather-announcement") {
         const entry = (liveState.announcement_weather || {})[liveSlotState.id];
         data = entry ? entry.weather : null;
-        opts = { heading: (entry && entry.heading) || "", todayOnly: true };
+        opts = { heading: (entry && entry.heading) || "", todayOnly: true, headingShadow: entry && entry.headingShadow };
       }
       if (data && data.location) {
         previewWeather.classList.remove("hidden");

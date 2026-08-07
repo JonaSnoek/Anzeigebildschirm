@@ -2568,7 +2568,8 @@
       <div class="ae-lang-tabs" id="ann-weather-heading-tabs">${EDITOR_LANGS.map((l) =>
         `<button type="button" class="ae-lang-tab${l === editorLang ? " active" : ""}" data-el-lang="${l}">${l === "de" ? "🇩🇪" : "🇬🇧"} ${l.toUpperCase()}</button>`
       ).join("")}</div>
-      ${inputRowHTML("ann-weather-heading", "Eigene Überschrift (optional)", headingValue(editorLang))}`;
+      ${inputRowHTML("ann-weather-heading", "Eigene Überschrift (optional)", headingValue(editorLang))}
+      ${checkRowHTML("ann-weather-heading-shadow", "Schatten der Überschrift", "weather.headingShadow")}`;
     const linkText = (id, path) => {
       const el = document.getElementById(id);
       if (!el) return;
@@ -2579,10 +2580,55 @@
     if (en) { en.checked = w.enabled === true; en.addEventListener("change", () => { w.enabled = en.checked; }); }
     linkText("ann-weather-location", "weather.location");
     linkText("ann-weather-heading", "weather.heading." + editorLang);
+    const hs = document.getElementById("ann-weather-heading-shadow");
+    if (hs) { hs.checked = w.headingShadow !== false; hs.addEventListener("change", () => { w.headingShadow = hs.checked; }); }
     const tabs = document.getElementById("ann-weather-heading-tabs");
     if (tabs) tabs.querySelectorAll("[data-el-lang]").forEach((b) => {
       b.addEventListener("click", () => { const l = b.dataset.elLang; if (l !== editorLang) setEditorLang(l); });
     });
+  }
+
+  /* Uhr auf dieser Folie: Sichtbarkeit, Farbe und Schatten der Uhrzeit.
+     Die Konfiguration liegt als `project.clock` im Projekt und wird vom
+     Display über den Timeline-Slot der Folie ausgewertet. */
+  const clockInspector = document.getElementById("ae-clock-inspector");
+  const CLOCK_PRESETS = [
+    ["#FFFFFF", "Weiß"],
+    ["#000000", "Schwarz"],
+    ["#FFD166", "Gelb"],
+    ["#4FA8FF", "Blau"],
+    ["#FF5252", "Rot"],
+  ];
+  function clockConfig() {
+    if (!project.clock || typeof project.clock !== "object") project.clock = {};
+    const c = project.clock;
+    c.enabled = c.enabled !== false;
+    if (!/^#[0-9a-fA-F]{6}$/.test(c.color)) c.color = "#FFFFFF";
+    c.shadow = c.shadow !== false;
+    return c;
+  }
+  function renderClockInspector() {
+    if (!clockInspector) return;
+    const c = clockConfig();
+    clockInspector.innerHTML = `
+      <p class="ae-hint">Bestimmt, ob die Uhrzeit während dieser Folie erscheint und in welcher Farbe.</p>
+      ${checkRowHTML("ann-clock-enabled", "Uhr anzeigen", "clock.enabled")}
+      <div class="ae-insp-sub">Uhrfarbe</div>
+      <div class="ae-clock-swatches">${CLOCK_PRESETS.map(([hex, label]) =>
+        `<button type="button" class="ae-clock-swatch${c.color.toUpperCase() === hex ? " active" : ""}" data-clock-color="${hex}" title="${esc(label)}" style="background:${hex}"></button>`
+      ).join("")}
+        <input type="color" class="ae-clock-custom" value="${c.color}" title="Eigene Farbe">
+      </div>
+      ${checkRowHTML("ann-clock-shadow", "Schatten aktiv", "clock.shadow")}`;
+    const en = document.getElementById("ann-clock-enabled");
+    if (en) { en.checked = c.enabled; en.addEventListener("change", () => { c.enabled = en.checked; render(); }); }
+    const sh = document.getElementById("ann-clock-shadow");
+    if (sh) { sh.checked = c.shadow; sh.addEventListener("change", () => { c.shadow = sh.checked; render(); }); }
+    clockInspector.querySelectorAll("[data-clock-color]").forEach((b) => {
+      b.addEventListener("click", () => { c.color = b.dataset.clockColor; renderClockInspector(); render(); });
+    });
+    const custom = clockInspector.querySelector(".ae-clock-custom");
+    if (custom) custom.addEventListener("input", () => { c.color = custom.value; renderClockInspector(); render(); });
   }
   function inputRowHTML(id, label, value) {
     return `<div class="ae-field"><label>${esc(label)}</label><input type="text" id="${id}" maxlength="120" value="${esc(value)}"></div>`;
@@ -2997,6 +3043,7 @@
     renderInspector();
     renderBgInspector();
     bindBg();
+    renderClockInspector();
     renderWeatherInspector();
     preloadProjectImages();
     render();

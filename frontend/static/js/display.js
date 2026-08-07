@@ -55,6 +55,8 @@
   let currentAudioUrl = null;
   let currentShownUrl = null;   // URL des aktuell gerenderten Bildes/Videos
   let currentSlotRef = null;    // zuletzt angezeigter Timeline-Slot
+  let lastSyncEnd = null;       // Serverzeit des zuletzt geprüften Zyklus-Endes
+  let syncInFlight = false;     // verhindert überlappende Revalidierungen
   let source = null;
 
   const nowSec = () => Date.now() / 1000 + skew;
@@ -153,12 +155,24 @@
       CLOCK_WIDGET.style.left = "";
       CLOCK_WIDGET.style.top = "";
     }
+    // Folien-Konfiguration der Uhr (Sichtbarkeit, Farbe, Schatten): gilt nur
+    // für die Uhr auf dem Ankündigungsbild, nicht für die große Uhr im
+    // Leerzustand (dort gibt es keine Folie).
+    const slotCfg = currentSlotRef && currentSlotRef.clock ? currentSlotRef.clock : null;
+    if (slotCfg) {
+      CLOCK_WIDGET.style.setProperty("--clock-color", slotCfg.color || "#FFFFFF");
+      CLOCK_WIDGET.style.setProperty("--clock-shadow", slotCfg.shadow === false ? "none" : "0 2px 10px rgba(0,0,0,.9)");
+    } else {
+      CLOCK_WIDGET.style.removeProperty("--clock-color");
+      CLOCK_WIDGET.style.removeProperty("--clock-shadow");
+    }
     // Uhr-Overlay nur während der Medienwiedergabe zeigen – NIEMALS auf
     // Wetterseiten (weder global noch die eigene Wetterseite eines
     // Ankündigungsbildes).
     const isAnnWeather = currentKey && currentKey.indexOf("weather-announcement:") === 0;
     const showingMedia = currentKey !== "idle" && currentKey !== "weather-screen" && !isAnnWeather;
-    if (!c.clockEnabled || !showingMedia) CLOCK_WIDGET.classList.add("hidden");
+    const slideClock = slotCfg ? slotCfg.enabled !== false : true;
+    if (!c.clockEnabled || !showingMedia || !slideClock) CLOCK_WIDGET.classList.add("hidden");
   }
 
   /* ---------- Wetter ---------- */
@@ -202,7 +216,7 @@
     if (isAnnouncement) {
       const entry = (state.announcement_weather || {})[currentAnnouncementId];
       data = entry ? entry.weather : null;
-      opts = { heading: localizedText(entry && entry.heading, lang), todayOnly: true };
+      opts = { heading: localizedText(entry && entry.heading, lang), todayOnly: true, headingShadow: entry && entry.headingShadow };
     }
 
     // Das kleine Widget hängt am Widget-Schalter; die große Zwischenansicht
@@ -387,6 +401,11 @@
       } else {
         syncVideo(slot);
       }
+      // Widgets bei jedem Tick neu anwenden – damit Folien-Uhr (Farbe/Schatten/
+      // Sichtbarkeit) und Wetter auch bei Live-Updates des selben Mediums
+      // sofort übernommen werden (z. B. neue Uhrfarbe gespeichert).
+      applyClock();
+      applyWeather();
       return;
     }
     currentKey = key;
@@ -430,8 +449,19 @@
     state.media = data.media || [];
     state.audio = data.audio || [];
     state.weather = data.weather || null;
+    const prevTimeline = state.timeline;
     state.timeline = data.timeline || null;
     state.announcement_weather = data.announcement_weather || {};
+    // Bei geändertem Zyklus das Prüffenster der Revalidierung zurücksetzen,
+    // damit der neue Zyklus wieder am Ende geprüft wird.
+    if (
+      state.timeline &&
+      (!prevTimeline ||
+        prevTimeline.cycle_start !== state.timeline.cycle_start ||
+        prevTimeline.cycle_duration !== state.timeline.cycle_duration)
+    ) {
+      lastSyncEnd = null;
+    }
     applyClock();
     applyWeather();
     updateAudio();
@@ -440,6 +470,36 @@
 
   function tick() {
     showSlot(currentSlot());
+    revalidate(false);
+  }
+
+  /* ---------- Zuverlässige Synchronisation ----------
+     SSE übernimmt Änderungen sofort. Zusätzlich holt sich der Client nach
+     jedem vollständigen Zyklus den aktuellen Zustand über /api/display –
+     bevor das erste Medium des nächsten Durchlaufs erscheint. Das ist der
+     Fallback bei unterbrochener Verbindung oder Standby: geänderte,
+     deaktivierte oder gelöschte Inhalte verschwinden damit zuverlässig.
+     `force` erzwingt eine sofortige Prüfung (z. B. Standby-Rückkehr). */
+  function revalidate(force) {
+    if (syncInFlight) return;
+    const tl = state.timeline;
+    if (!force) {
+      if (!tl || !tl.items || tl.items.length === 0) return;
+      const end = tl.cycle_start + tl.cycle_duration;
+      const dur = Math.max(tl.cycle_duration, 1);
+      if (nowSec() < end - 1.5) return; // Zyklus läuft noch
+      if (lastSyncEnd !== null && nowSec() < lastSyncEnd + dur - 1.5) return; // dieser Zyklus geprüft
+    }
+    syncInFlight = true;
+    const checkedEnd = tl ? tl.cycle_start + tl.cycle_duration : null;
+    fetch("/api/display", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((data) => {
+        applyState(data, data.server_time);
+        if (checkedEnd !== null) lastSyncEnd = checkedEnd;
+      })
+      .catch(() => { /* nächster Zyklus versucht es erneut */ })
+      .finally(() => { syncInFlight = false; });
   }
 
   /* ---------- Echtzeit (SSE) ---------- */
@@ -494,7 +554,10 @@
 
     connect();
     document.addEventListener("visibilitychange", () => {
-      if (!document.hidden && source && source.readyState !== EventSource.OPEN) connect();
+      if (!document.hidden) {
+        if (source && source.readyState !== EventSource.OPEN) connect();
+        revalidate(true);
+      }
     });
   }
 

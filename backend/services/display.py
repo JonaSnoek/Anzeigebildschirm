@@ -13,7 +13,8 @@ und die Anzeigedauer zentral vor.
 
 Element-Typen: "image", "video", "clock" (Uhr-Ansicht zwischen den Medien,
 sofern clock_interstitial aktiv ist) und "weather" (eigene große Wetter-Ansicht,
-sofern weather_interstitial aktiv ist).
+sofern weather_interstitial aktiv ist). Jedes Ankündigungsbild trägt außerdem
+seine eigene Uhr-Konfiguration (Sichtbarkeit, Farbe, Schatten) im Slot.
 """
 
 import time
@@ -38,8 +39,10 @@ _cache: dict = {"signature": None, "cycle_start": 0.0}
 
 def _announcement_configs(items) -> dict:
     """
-    Liefert je Ankündigungsbild dessen Wetter-Konfiguration (aus der
-    Projektdatei). Nur Bilder mit aktiviertem Wetter und Standort zählen.
+    Liefert je Ankündigungsbild dessen Einstellungen aus der Projektdatei:
+
+    - `clock`:  Uhr-Steuerung der Folie (Sichtbarkeit, Farbe, Schatten).
+    - `weather`: Wetter-Konfiguration (nur wenn aktiviert UND Standort gesetzt).
 
     Die Überschrift ist mehrsprachig: entweder ein String (legacy) oder ein
     {Sprache: Text}-Dict. Das Display wählt die passende Sprache selbst.
@@ -49,20 +52,29 @@ def _announcement_configs(items) -> dict:
         if m.type != "image" or not m.project_file:
             continue
         project = load_project(m) or {}
+        clock = project.get("clock") or {}
         w = project.get("weather") or {}
         location = (w.get("location") or "").strip()
-        if not w.get("enabled") or not location:
-            continue
         heading = w.get("heading") or ""
         if isinstance(heading, dict):
             heading = {k: str(v).strip() for k, v in heading.items() if v}
         else:
             heading = str(heading).strip()
-        out[m.id] = {
-            "enabled": True,
-            "location": location,
-            "heading": heading,
+        entry: dict = {
+            "clock": {
+                "enabled": clock.get("enabled") is not False,
+                "color": str(clock.get("color") or "#FFFFFF"),
+                "shadow": clock.get("shadow") is not False,
+            },
         }
+        if w.get("enabled") and location:
+            entry["weather"] = {
+                "enabled": True,
+                "location": location,
+                "heading": heading,
+                "headingShadow": w.get("headingShadow") is not False,
+            }
+        out[m.id] = entry
     return out
 
 
@@ -117,19 +129,25 @@ def _timeline_slots(items, settings: dict, aw_configs: dict = None):
         config = aw_configs.get(item.id)
         if not config:
             return None
-        heading = config.get("heading") or ""
+        wc = config.get("weather")
+        if not wc:
+            return None
+        heading = wc.get("heading") or ""
         return {
             "type": "weather-announcement",
             "id": item.id,
             "name": heading or item.name,
             "url": "",
             "duration": float(slide),
-            "location": config["location"],
+            "location": wc["location"],
             "heading": heading,
+            "headingShadow": wc.get("headingShadow", True),
+            "clock": config.get("clock") or {},
         }
 
     slots = []
     for item in items:
+        config = aw_configs.get(item.id)
         slots.append({
             "type": item.type,
             "id": item.id,
@@ -140,6 +158,7 @@ def _timeline_slots(items, settings: dict, aw_configs: dict = None):
                 for lang, name in (item.language_files_dict() or {}).items()
             },
             "duration": _item_duration(item, slide),
+            "clock": config.get("clock") if config else None,
         })
         # Direkt nach dem Ankündigungsbild dessen eigene Wetterseite einfügen.
         aw = announcement_weather_slot(item)
@@ -174,7 +193,7 @@ def _signature(items, settings: dict, aw_configs: dict = None) -> str:
         f"{m.id}:{m.duration or 0}:{m.sort_order}:{m.active}" for m in items
     )
     announce = ",".join(
-        f"{m_id}:{cfg.get('enabled')}:{cfg.get('location')}:{cfg.get('heading')}"
+        f"{m_id}:{cfg.get('weather', {}).get('enabled')}:{cfg.get('weather', {}).get('location')}:{cfg.get('weather', {}).get('heading')}"
         for m_id, cfg in aw_configs.items()
     )
     return "|".join([
@@ -223,10 +242,14 @@ def build_announcement_weather(items) -> dict:
         config = configs.get(m.id)
         if not config:
             continue
+        wc = config.get("weather")
+        if not wc:
+            continue
         out[m.id] = {
-            "location": config["location"],
-            "heading": config["heading"],
-            "weather": weather_svc.get_location_weather_snapshot(config["location"]),
+            "location": wc["location"],
+            "heading": wc["heading"],
+            "headingShadow": wc.get("headingShadow", True),
+            "weather": weather_svc.get_location_weather_snapshot(wc["location"]),
         }
     return out
 
@@ -248,8 +271,11 @@ def refresh_announcement_weather() -> None:
         config = configs.get(m.id)
         if not config:
             continue
+        wc = config.get("weather")
+        if not wc:
+            continue
         try:
-            weather_svc.get_location_weather(config["location"])
+            weather_svc.get_location_weather(wc["location"])
         except Exception:  # noqa: BLE001 – Netzwerkfehler ignorieren (Cache fällt zurück)
             pass
 

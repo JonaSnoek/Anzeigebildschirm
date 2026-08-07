@@ -12,7 +12,7 @@
 
 "use strict";
 
-const VERSION = "v12";
+const VERSION = "v13";
 const CACHE = "anzeige-" + VERSION;
 
 const PRECACHE = [
@@ -83,10 +83,11 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Öffentliche APIs: Netzwerk zuerst, Cache-Fallback
+  // Öffentliche APIs: Netzwerk zuerst, Cache-Fallback. Der Netzwerkabruf
+  // umgeht den HTTP-Cache, damit nie ein veralteter Zustand ausgeliefert wird.
   if (PUBLIC_API.includes(path)) {
     event.respondWith(
-      fetch(request)
+      fetch(new Request(request, { cache: "no-store" }))
         .then((response) => {
           const copy = response.clone();
           caches.open(CACHE).then((cache) => cache.put(request, copy));
@@ -116,9 +117,11 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Medien (Bilder/Videos/Audio): Netzwerk zuerst, Cache-Fallback
+  // Medien (Bilder/Videos/Audio): Netzwerk zuerst, Cache-Fallback. Der
+  // Netzwerkabruf umgeht den HTTP-Cache (die Medien laufen mit no-store –
+  // ersetzte oder gelöschte Dateien erscheinen nie veraltet).
   event.respondWith(
-    fetch(request)
+    fetch(new Request(request, { cache: "no-store" }))
       .then((response) => {
         if (response.ok) {
           const copy = response.clone();

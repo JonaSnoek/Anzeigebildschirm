@@ -277,6 +277,20 @@
 .ae-check-line { display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: #c7d2e0; cursor: pointer; }
 .ae-check-line input { accent-color: #2f5cff; width: 15px; height: 15px; }
 
+/* Uhrfarben-Auswahl (Farbfelder + eigener Farbwähler) */
+.ae-clock-swatches { display: flex; align-items: center; gap: 6px; margin: 4px 0 8px; }
+.ae-clock-swatch {
+  width: 26px; height: 26px; border-radius: 50%;
+  border: 2px solid #2a3547; cursor: pointer; padding: 0;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .25);
+}
+.ae-clock-swatch:hover { border-color: #3b4a63; }
+.ae-clock-swatch.active { border-color: #2f5cff; box-shadow: 0 0 0 2px rgba(47, 92, 255, .35); }
+.ae-clock-custom {
+  width: 34px; height: 26px; border: 1px solid #2a3547; border-radius: 7px;
+  background: #121a26; padding: 2px; cursor: pointer;
+}
+
 .ae-insp-sub { font-size: 10.5px; text-transform: uppercase; letter-spacing: .1em; color: #5f6e85; margin: 10px 0 6px; font-weight: 700; }
 .ae-hint { font-size: 11.5px; color: #5f6e85; line-height: 1.5; }
 .ae-stack { display: flex; flex-direction: column; gap: 8px; }

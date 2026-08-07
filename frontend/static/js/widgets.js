@@ -125,9 +125,10 @@ window.Signage = (function () {
    * - Groß:   zusätzlich der Tagesverlauf (Morgen/Mittag/Abend) je Tag
    *
    * Optionen `opts` (für die Wetterseite eines Ankündigungsbildes):
-   *   heading   – große Überschrift oberhalb des Wetters
-   *   todayOnly – nur den aktuellen Tag zeigen (keine "Morgen"-Vorhersage)
-   *               sowie "Regen / Kein Regen" und die Regenwahrscheinlichkeit
+   *   heading       – große Überschrift oberhalb des Wetters
+   *   headingShadow – false, um den Schatten der Überschrift zu deaktivieren
+   *   todayOnly     – nur den aktuellen Tag zeigen (keine "Morgen"-Vorhersage)
+   *                   sowie "Regen / Kein Regen" und die Regenwahrscheinlichkeit
    */
   function weatherMarkup(data, display, lang, opts) {
     const d = data || {};
@@ -197,7 +198,7 @@ window.Signage = (function () {
     const showTomorrow = !o.todayOnly && !!(d.tomorrow && d.tomorrow.state !== undefined);
     return `
       <div class="weather-blocks ${o.todayOnly ? "weather-today-only" : ""}">
-        ${o.heading ? `<div class="weather-heading">${esc(o.heading)}</div>` : ""}
+        ${o.heading ? `<div class="weather-heading${o.headingShadow === false ? " no-shadow" : ""}">${esc(o.heading)}</div>` : ""}
         ${d.location ? `<div class="weather-location">${esc(d.location)}</div>` : ""}
         <div class="weather-days">
           ${card("today", today)}
