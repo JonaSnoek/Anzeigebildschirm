@@ -213,10 +213,22 @@ window.Signage = (function () {
    * HTML-Widgets (Ankündigungsbilder): Rendering und Aktualisierung für
    * Display und Live-Vorschau. Jedes Widget wird in einem isolierten iframe
    * gerendert (beliebiger HTML-/CSS-/JavaScript-Code). Position, Größe und
-   * Drehung kommen aus dem Projekt (1920×1080-Koordinaten); die Positionierung
-   * erfolgt relativ zur "content box" des Bildes (object-fit: contain).
+   * Drehung kommen aus dem Projekt; die Positionierung erfolgt relativ zur
+   * "content box" des Bildes (object-fit: contain).
+   *
+   * FESTE ARBEITSFLÄCHE: Das iframe erhält intern IMMER die volle
+   * Projektauflösung (z. B. 1920×1080) als Viewport. Der HTML-Code wird also
+   * unabhängig vom Gerät exakt auf dieser Arbeitsfläche berechnet (alle
+   * Einheiten, auch vw/vh/rem, beziehen sich auf die Projektauflösung).
+   * Der Widget-Rahmen (x, y, w, h) definiert lediglich den SICHTBAREN Bereich:
+   * Das iframe wird im Knoten negativ versetzt (-x·S, -y·S) und per
+   * CSS-Transform proportional skaliert (scale S = Skalierung der gesamten
+   * Arbeitsfläche). Dadurch sieht ein Widget auf iPad, Monitor und Fernseher
+   * identisch aus – ohne Neuformatierung oder weiße Ränder. Nur die gesamte
+   * Anzeige wird proportional skaliert.
    *
    * Item-Form: { x, y, w, h, rotation, opacity, html, refresh, interval }.
+   * Box-Form (von contentBox): { left, top, scale, pw, ph }.
    * Aktualisierung: neues iframe unsichtbar erzeugen, nach dem Laden
    * umschalten (kein Flackern, kein weißer Bildschirm).
    *
@@ -250,7 +262,25 @@ window.Signage = (function () {
       const ch = container ? (container.clientHeight || container.getBoundingClientRect().height) : window.innerHeight;
       const w = toNum(width, 1920), h = toNum(height, 1080);
       const scale = Math.min(cw / w, ch / h);
-      return { left: (cw - w * scale) / 2, top: (ch - h * scale) / 2, scale: scale };
+      return { left: (cw - w * scale) / 2, top: (ch - h * scale) / 2, scale: scale, pw: w, ph: h };
+    }
+
+    /* Feste Arbeitsfläche im iframe: Der iframe-Viewport ist immer die volle
+       Projektauflösung (pw×ph). Der sichtbare Bereich (Widget-Rahmen x/y/w/h)
+       entsteht durch negatives Versetzen und proportionales Skalieren des
+       iframes. `box` = { left, top, scale, pw, ph } (von contentBox). */
+    function layoutFrame(frame, item, box) {
+      if (!frame) return;
+      const b = box || { left: 0, top: 0, scale: 1, pw: 1920, ph: 1080 };
+      const S = toNum(b.scale, 1);
+      const pw = Math.round(toNum(b.pw, 1920));
+      const ph = Math.round(toNum(b.ph, 1080));
+      frame.style.width = pw + "px";
+      frame.style.height = ph + "px";
+      frame.style.left = (-toNum(item.x, 0) * S) + "px";
+      frame.style.top = (-toNum(item.y, 0) * S) + "px";
+      frame.style.transform = "scale(" + S + ")";
+      frame.style.transformOrigin = "0 0";
     }
 
     function place(node, item, box) {
@@ -261,6 +291,7 @@ window.Signage = (function () {
       node.style.height = (toNum(item.h, 0) * b.scale) + "px";
       node.style.transform = "rotate(" + toNum(item.rotation, 0) + "deg)";
       node.style.opacity = String(clamp(toNum(item.opacity, 1), 0, 1));
+      layoutFrame(node._frame, item, box);
     }
 
     function frame(item) {
@@ -272,11 +303,16 @@ window.Signage = (function () {
       return f;
     }
 
-    /* Vollständiges Widget-Dokument: Standards-Modus + Beobachter VOR dem
-       Nutzercode, damit auch Fehler während des Parsens von Nutzer-Skripten
-       erfasst werden (die Meldung erscheint statt einer leeren Fläche). */
+    /* Vollständiges Widget-Dokument: Standards-Modus, Entfernen von
+       Browser-Standardrändern/-scrollen (keine weißen Ränder) und Beobachter
+       VOR dem Nutzercode, damit auch Fehler während des Parsens von
+       Nutzer-Skripten erfasst werden. Der iframe-Viewport wird über CSS
+       (layoutFrame) auf die feste Projektauflösung gesetzt. */
     function srcdoc(html) {
-      return "<!doctype html><meta charset=\"utf-8\">" + widgetScript() + String(html == null ? "" : html);
+      return "<!doctype html><meta charset=\"utf-8\">"
+        + "<style>html,body{margin:0;padding:0;width:100%;height:100%;overflow:hidden;background:transparent;}</style>"
+        + widgetScript()
+        + String(html == null ? "" : html);
     }
 
     /* Beobachter pro iframe: meldet „load“, sammelt Fehlermeldungen des
@@ -372,12 +408,22 @@ window.Signage = (function () {
     }
 
     /* Flackerfreie Aktualisierung: neues iframe unsichtbar darüber legen,
-       nach dem Laden (oder spätestens nach 8 s) umschalten. */
+       nach dem Laden (oder spätestens nach 8 s) umschalten. Das neue iframe
+       erhält dieselbe feste Arbeitsfläche (Geometrie) wie das alte, damit
+       der Viewport unverändert bleibt. */
     function refresh(node, item) {
       const old = node._frame;
       clearStatus(node);
       const fresh = frame(item);
       fresh.style.opacity = "0";
+      if (old) {
+        fresh.style.width = old.style.width;
+        fresh.style.height = old.style.height;
+        fresh.style.left = old.style.left;
+        fresh.style.top = old.style.top;
+        fresh.style.transform = old.style.transform;
+        fresh.style.transformOrigin = old.style.transformOrigin;
+      }
       node.appendChild(fresh);
       node._frame = fresh;
       watch(node, fresh);
@@ -407,6 +453,7 @@ window.Signage = (function () {
       contentBox,
       createNode,
       place,
+      layoutFrame,
       refresh,
       startTimer,
       watch,

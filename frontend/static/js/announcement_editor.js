@@ -1462,6 +1462,16 @@
     frame.setAttribute("scrolling", "no");
     frame.setAttribute("frameborder", "0");
     frame.srcdoc = widgetSrcdoc(html);
+    /* Feste Arbeitsfläche (Projektauflösung): Der iframe-Viewport ist immer
+       die volle Arbeitsfläche, der sichtbare Bereich entsteht durch
+       negatives Versetzen + proportionales Skalieren (siehe widgets.js). */
+    const z = view.zoom;
+    frame.style.width = W + "px";
+    frame.style.height = H + "px";
+    frame.style.left = (-num(el.x, 0) * z) + "px";
+    frame.style.top = (-num(el.y, 0) * z) + "px";
+    frame.style.transform = "scale(" + z + ")";
+    frame.style.transformOrigin = "0 0";
     if (old && old.parentNode === node) {
       node.replaceChild(frame, old);
       if (old._stopWatch) old._stopWatch();
@@ -1509,17 +1519,13 @@
     widgetLayer.style.display = exporting ? "none" : "block";
     if (exporting) return;
     const z = view.zoom;
+    const box = { left: 0, top: 0, scale: z, pw: W, ph: H };
     const seen = new Set();
     for (const el of project.elements) {
       if (el.type !== "html") continue;
       seen.add(el.id);
       const node = widgetNode(el);
-      node.style.left = (num(el.x, 0) * z) + "px";
-      node.style.top = (num(el.y, 0) * z) + "px";
-      node.style.width = (num(el.w, 0) * z) + "px";
-      node.style.height = (num(el.h, 0) * z) + "px";
-      node.style.transform = "rotate(" + num(el.rotation, 0) + "deg)";
-      node.style.opacity = String(clamp(num(el.opacity, 1), 0, 1));
+      Signage.HtmlWidgets.place(node, el, box);
       node.classList.toggle("selected", el.id === selectedId);
       if (!node.parentNode) widgetLayer.appendChild(node);
       syncWidgetNode(node, el);
