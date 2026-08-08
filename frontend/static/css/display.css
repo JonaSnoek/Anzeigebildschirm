@@ -39,6 +39,39 @@ body {
   object-fit: contain;
 }
 
+/* ---------- Auto-Slide (vertikal scrollende Folie) ---------- */
+#auto-slide {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  z-index: 20;
+  pointer-events: none;
+}
+
+.auto-slide-track {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  will-change: transform;
+}
+
+.auto-slide-img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+/* Widgets scrollen mit der Folie mit (liegen im Track) */
+.auto-slide-widgets {
+  position: absolute;
+  inset: 0;
+}
+
+.auto-slide-widgets .hw {
+  position: absolute;
+}
+
 /* ---------- Safe Areas (Notch / Home-Indikator) ---------- */
 .lang-toggle {
   position: fixed;

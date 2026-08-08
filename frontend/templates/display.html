@@ -46,6 +46,16 @@
   <!-- HTML-Widgets (dynamische Inhalte der Ankündigungsbilder) -->
   <div id="widget-layer" class="widget-layer"></div>
 
+  <!-- Auto-Slide: vertikal scrollende hochformatige Folie (konstante
+       Geschwindigkeit, Ende exakt nach der eingestellten Gesamtdauer).
+       Der Track enthält das Folien-PNG und die mit scrollenden Widgets. -->
+  <div id="auto-slide" class="auto-slide hidden">
+    <div id="auto-slide-track" class="auto-slide-track">
+      <img id="auto-slide-img" class="auto-slide-img" alt="">
+      <div id="auto-slide-widgets" class="auto-slide-widgets"></div>
+    </div>
+  </div>
+
   <!-- Sprachumschalter (Deutsch / Englisch) -->
   <button id="lang-toggle" class="lang-toggle" type="button" title="Sprache wechseln" aria-label="Sprache wechseln">DE</button>
 

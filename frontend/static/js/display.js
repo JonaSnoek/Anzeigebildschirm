@@ -28,6 +28,10 @@
   const AUDIO = document.getElementById("bg-audio");
   const LANG_BTN = document.getElementById("lang-toggle");
   const WIDGET_LAYER = document.getElementById("widget-layer");
+  const AUTO_SLIDE = document.getElementById("auto-slide");
+  const AUTO_TRACK = document.getElementById("auto-slide-track");
+  const AUTO_IMG = document.getElementById("auto-slide-img");
+  const AUTO_WIDGETS = document.getElementById("auto-slide-widgets");
 
   const LANGS = Signage.LANGS;
 
@@ -50,7 +54,7 @@
   // Serverzeit - lokale Zeit (Sekunden), wird bei jedem Event korrigiert.
   let skew = 0;
 
-  let currentKey = null;   // "idle" | "weather-screen" | "weather-announcement:<id>" | "image:<id>" | "video:<id>"
+  let currentKey = null;   // "idle" | "weather-screen" | "weather-announcement:<id>" | "image:<id>" | "video:<id>" | "auto_slide:<id>"
   let currentAnnouncementId = null;
   let currentLayer = LAYER_A;
   let currentAudioUrl = null;
@@ -104,6 +108,143 @@
       const timer = Signage.HtmlWidgets.startTimer(item, node);
       if (timer !== null) widgetTimers.push(timer);
     }
+  }
+
+  /* ---------- Auto-Slides (vertikal scrollende Folien) ----------
+     Die hochformatige Folie füllt die Bildschirmbreite (Scale S = Bildschirm-
+     breite / Projektbreite) und scrollt mit KONSTANTER Geschwindigkeit von
+     oben nach unten. Der Track läuft per requestAnimationFrame (ohne Sprünge,
+     Ruckeln oder Abbremsen); die Endposition wird exakt zum Slot-Ende
+     erreicht. HTML-Widgets liegen im Track und scrollen mit. */
+  let autoNodes = [];
+  let autoTimers = [];
+  let autoLastSig = null;
+  let autoTrackH = 0;
+  let rafId = null;
+
+  function autoDispose() {
+    autoNodes.forEach((w) => Signage.HtmlWidgets.dispose(w.node));
+    autoNodes = [];
+    autoStopTimers();
+    if (AUTO_WIDGETS) AUTO_WIDGETS.innerHTML = "";
+    if (rafId !== null) { cancelAnimationFrame(rafId); rafId = null; }
+  }
+
+  function autoStopTimers() {
+    autoTimers.forEach((t) => clearInterval(t));
+    autoTimers = [];
+  }
+
+  /* Skalierung der Folie auf die Bildschirmbreite (vertikale Folie füllt
+     die Breite; die Höhe ragt über den Bildschirm hinaus und wird gescrollt). */
+  function autoScale(slot) {
+    const cw = window.innerWidth;
+    const w = num(slot && slot.width, 1080) || 1080;
+    const h = num(slot && slot.height, 3000) || 3000;
+    const S = w > 0 ? cw / w : 1;
+    return { cw: cw, w: w, h: h, S: S };
+  }
+
+  function autoSetup(slot) {
+    const geo = autoScale(slot);
+    const url = slotUrl(slot);
+    if (url !== currentShownUrl) {
+      currentShownUrl = url;
+      AUTO_IMG.src = url;
+    }
+    autoTrackH = geo.h * geo.S;
+    AUTO_TRACK.style.width = "100%";
+    AUTO_TRACK.style.height = autoTrackH + "px";
+    AUTO_TRACK.style.transform = "translateY(0px)";
+    // Exakte Track-Höhe nach dem Laden des PNGs (gleiches Seitenverhältnis).
+    AUTO_IMG.onload = () => {
+      if (AUTO_IMG.naturalHeight > 0 && AUTO_IMG.naturalWidth > 0) {
+        autoTrackH = AUTO_IMG.naturalHeight * geo.S;
+        AUTO_TRACK.style.height = autoTrackH + "px";
+      }
+    };
+    autoSetupWidgets(slot, geo);
+  }
+
+  function autoSetupWidgets(slot, geo) {
+    const cfg = slot && slot.widgets ? slot.widgets : null;
+    const sig = cfg ? slot.id + ":" + JSON.stringify(cfg) : null;
+    if (sig === autoLastSig) {
+      // Nur neu positionieren (z. B. nach Resize) – Widgets NICHT neu laden.
+      if (cfg) {
+        autoNodes.forEach((w) => Signage.HtmlWidgets.place(w.node, w.item, { left: 0, top: 0, scale: geo.S }));
+      }
+      return;
+    }
+    autoLastSig = sig;
+    autoDispose();
+    if (!cfg || !cfg.items || !cfg.items.length) return;
+    // Widgets liegen im Track: Position im Projekt × Scale, Start oben links.
+    for (const item of cfg.items) {
+      const node = Signage.HtmlWidgets.createNode(item, { left: 0, top: 0, scale: geo.S });
+      AUTO_WIDGETS.appendChild(node);
+      autoNodes.push({ node, item });
+      const timer = Signage.HtmlWidgets.startTimer(item, node);
+      if (timer !== null) autoTimers.push(timer);
+    }
+  }
+
+  /* Scroll-Schleife: lineare (konstante) Verschiebung über die Gesamtdauer.
+     y(t) = -p * scrollMax mit p = (t - Start) / Dauer → Ende exakt bei 100 %. */
+  function autoFrame() {
+    rafId = null;
+    const slot = currentSlotRef;
+    if (!slot || slot.type !== "auto_slide") return;
+    const geo = autoScale(slot);
+    const scrollMax = Math.max(0, autoTrackH - window.innerHeight);
+    let p = 0;
+    const tl = state.timeline;
+    if (tl) {
+      const start = tl.cycle_start + slot.start;
+      const dur = Math.max(slot.duration, 0.1);
+      p = (nowSec() - start) / dur;
+      p = Math.max(0, Math.min(1, p));
+    }
+    AUTO_TRACK.style.transform = "translateY(" + (-p * scrollMax) + "px)";
+    rafId = requestAnimationFrame(autoFrame);
+  }
+
+  function showAutoSlide(slot) {
+    const key = "auto_slide:" + slot.id;
+    if (key !== currentKey) {
+      currentKey = key;
+      currentAnnouncementId = slot.id;
+      stopPlayer();
+      PLAYER.classList.add("hidden");
+      AUTO_SLIDE.classList.remove("hidden");
+      autoSetup(slot);
+    } else if (slotUrl(slot) !== currentShownUrl) {
+      // Live-Update: neues PNG desselben Auto-Slides – nur Quelle wechseln.
+      currentShownUrl = slotUrl(slot);
+      AUTO_IMG.src = currentShownUrl;
+      autoSetupWidgets(slot, autoScale(slot));
+    } else {
+      autoSetupWidgets(slot, autoScale(slot));
+    }
+    applyClock();
+    applyWeather();
+    if (rafId === null) rafId = requestAnimationFrame(autoFrame);
+  }
+
+  function hideAutoSlide() {
+    if (rafId !== null) { cancelAnimationFrame(rafId); rafId = null; }
+    autoDispose();
+    autoLastSig = null;
+    if (AUTO_SLIDE) AUTO_SLIDE.classList.add("hidden");
+  }
+
+  function autoResize() {
+    const slot = currentSlotRef;
+    if (!slot || slot.type !== "auto_slide") return;
+    const geo = autoScale(slot);
+    autoTrackH = geo.h * geo.S;
+    AUTO_TRACK.style.height = autoTrackH + "px";
+    autoSetupWidgets(slot, geo);
   }
 
   /* Lokalisierter Text eines Ankündigungsbildes (Wetter-Überschrift o. Ä.):
@@ -387,6 +528,7 @@
     if (currentKey === "idle") return;
     currentKey = "idle";
     stopPlayer();
+    hideAutoSlide();
     PLAYER.classList.add("hidden");
     applyClock();
     applyWeather();
@@ -399,6 +541,7 @@
     currentKey = "weather-screen";
     currentAnnouncementId = null;
     stopPlayer();
+    hideAutoSlide();
     PLAYER.classList.add("hidden");
     applyClock();
     applyWeather();
@@ -413,6 +556,7 @@
     currentKey = key;
     currentAnnouncementId = slot.id;
     stopPlayer();
+    hideAutoSlide();
     PLAYER.classList.add("hidden");
     applyClock();
     applyWeather();
@@ -436,6 +580,10 @@
     }
     if (slot.type === "weather-announcement") {
       showAnnouncementWeather(slot);
+      return;
+    }
+    if (slot.type === "auto_slide") {
+      showAutoSlide(slot);
       return;
     }
     const key = slot.type + ":" + slot.id;
@@ -576,10 +724,15 @@
     localStorage.setItem("display_lang", lang);
     document.documentElement.lang = lang;
     if (LANG_BTN) LANG_BTN.textContent = lang.toUpperCase();
-    // Ankündigungsbilder mit Sprachvarianten: aktuelles Bild in der neuen
-    // Sprache neu laden (Sprachwechsel ohne Admin-Zutun).
+    // Medien mit Sprachvarianten: aktuelles Medium in der neuen Sprache neu
+    // laden (Sprachwechsel ohne Admin-Zutun).
     const slot = currentSlotRef;
-    if (slot && slot.type === "image" && slotUrl(slot) !== currentShownUrl) renderImage(slot);
+    if (slot && slot.type === "auto_slide" && slotUrl(slot) !== currentShownUrl) {
+      currentShownUrl = slotUrl(slot);
+      AUTO_IMG.src = currentShownUrl;
+    } else if (slot && slot.type === "image" && slotUrl(slot) !== currentShownUrl) {
+      renderImage(slot);
+    }
     updateClock();
     applyWeather();
   }
@@ -593,7 +746,7 @@
     updateClock();
     setInterval(updateClock, 1000);
     setInterval(tick, 500);
-    window.addEventListener("resize", applyHtmlWidgets);
+    window.addEventListener("resize", () => { applyHtmlWidgets(); autoResize(); });
 
     try {
       const res = await fetch("/api/display", { cache: "no-store" });

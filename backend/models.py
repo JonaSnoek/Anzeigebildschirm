@@ -67,7 +67,7 @@ class Media(db.Model):
     __tablename__ = "media"
 
     id = db.Column(Integer, primary_key=True)
-    type = db.Column(String(16), nullable=False, index=True)  # image | video | audio
+    type = db.Column(String(16), nullable=False, index=True)  # image | video | audio | auto_slide
     name = db.Column(String(200), nullable=False, default="")          # Anzeigename
     stored_name = db.Column(String(200), nullable=False, unique=True)  # Dateiname auf Platte
     mime_type = db.Column(String(120), nullable=False, default="application/octet-stream")

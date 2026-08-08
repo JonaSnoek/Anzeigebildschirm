@@ -59,13 +59,20 @@ class Config:
         "image": "images",
         "video": "videos",
         "audio": "audio",
+        # Auto-Slides: gerenderte Hochformat-PNGs aus dem Auto-Slide-Editor
+        # (die editierbaren Projektdateien liegen unter ANNOUNCEMENT_DIR).
+        "auto_slide": "auto_slides",
     }
 
-    # Erlaubte Dateiendungen je Medientyp
+    # Erlaubte Dateiendungen je Medientyp. auto_slide wird nur im
+    # Auto-Slide-Editor erzeugt (dort ist die Höhe unbegrenzt hochformatig);
+    # ein generischer Bibliotheks-Upload klassifiziert PNGs weiterhin als
+    # "image" (erstes Match in _classify).
     UPLOAD_TYPES = {
         "image": (".jpg", ".jpeg", ".png", ".gif", ".webp"),
         "video": (".mp4", ".webm"),
         "audio": (".mp3", ".wav", ".ogg"),
+        "auto_slide": (".png", ".jpg", ".jpeg", ".webp"),
     }
 
     # Maximale Dateigröße je Medientyp (in Bytes)
@@ -73,6 +80,7 @@ class Config:
         "image": 20 * 1024 * 1024,    # 20 MB
         "video": 500 * 1024 * 1024,   # 500 MB
         "audio": 100 * 1024 * 1024,   # 100 MB
+        "auto_slide": 100 * 1024 * 1024,  # 100 MB (sehr lange Hochformat-PNGs)
     }
 
     # ---- Standard-Wiedergabe-Einstellungen ---------------------------------

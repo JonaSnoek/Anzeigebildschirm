@@ -14,7 +14,7 @@
  * Vorschau (dort setzt die Vorschau die Werte auf die Boxgröße).
  */
 
-window.Signage = (function () {
+window.Signage = window.Signage || (function () {
   "use strict";
 
   function esc(text) {
@@ -216,19 +216,24 @@ window.Signage = (function () {
    * Drehung kommen aus dem Projekt; die Positionierung erfolgt relativ zur
    * "content box" des Bildes (object-fit: contain).
    *
-   * FESTE ARBEITSFLÄCHE: Das iframe erhält intern IMMER die volle
-   * Projektauflösung (z. B. 1920×1080) als Viewport. Der HTML-Code wird also
-   * unabhängig vom Gerät exakt auf dieser Arbeitsfläche berechnet (alle
-   * Einheiten, auch vw/vh/rem, beziehen sich auf die Projektauflösung).
-   * Der Widget-Rahmen (x, y, w, h) definiert lediglich den SICHTBAREN Bereich:
-   * Das iframe wird im Knoten negativ versetzt (-x·S, -y·S) und per
-   * CSS-Transform proportional skaliert (scale S = Skalierung der gesamten
-   * Arbeitsfläche). Dadurch sieht ein Widget auf iPad, Monitor und Fernseher
-   * identisch aus – ohne Neuformatierung oder weiße Ränder. Nur die gesamte
-   * Anzeige wird proportional skaliert.
+   * WYSIWYG-Widget: Der iframe-Viewport ist IMMER die feste Inhaltsauflösung
+   * des Widgets (cw×ch, beim Anlegen gesetzt und danach unverändert). Der
+   * HTML-Code wird also in Originalgröße gegen diesen Viewport berechnet –
+   * alle Einheiten (auch vw/vh/%/rem) beziehen sich auf die Inhaltsauflösung,
+   * unabhängig von Bildschirmgröße oder Browser. Der Widget-Rahmen (w×h) ist
+   * die angezeigte Größe; das Verhältnis w:h = cw:ch bleibt erhalten. Das
+   * gesamte iframe wird als EINE Einheit proportional skaliert (scale =
+   * Bildschirm-Skala S × Widget-Skalierung zoom). Dadurch bleibt das
+   * Seitenverhältnis erhalten, Text fließt NIE um, Schriften/Layout werden
+   * NIE neu berechnet – Vergrößern/Verkleinern wirkt wie bei einem Bild. Die
+   * Darstellung ist auf iPad, Monitor und Fernseher identisch und entspricht
+   * exakt der Editor-Vorschau (WYSIWYG).
    *
-   * Item-Form: { x, y, w, h, rotation, opacity, html, refresh, interval }.
-   * Box-Form (von contentBox): { left, top, scale, pw, ph }.
+   * Item-Form: { x, y, w, h, cw, ch, zoom, rotation, opacity, html, refresh,
+   * interval }. cw/ch = feste Inhaltsauflösung (Viewport), zoom =
+   * Skalierungsfaktor (w = cw·zoom, h = ch·zoom). Fehlen cw/ch/zoom, gilt
+   * cw = w, ch = h, zoom = 1 (bisherige Projekte bleiben unverändert).
+   * Box-Form (von contentBox): { left, top, scale }.
    * Aktualisierung: neues iframe unsichtbar erzeugen, nach dem Laden
    * umschalten (kein Flackern, kein weißer Bildschirm).
    *
@@ -262,24 +267,26 @@ window.Signage = (function () {
       const ch = container ? (container.clientHeight || container.getBoundingClientRect().height) : window.innerHeight;
       const w = toNum(width, 1920), h = toNum(height, 1080);
       const scale = Math.min(cw / w, ch / h);
-      return { left: (cw - w * scale) / 2, top: (ch - h * scale) / 2, scale: scale, pw: w, ph: h };
+      return { left: (cw - w * scale) / 2, top: (ch - h * scale) / 2, scale: scale };
     }
 
-    /* Feste Arbeitsfläche im iframe: Der iframe-Viewport ist immer die volle
-       Projektauflösung (pw×ph). Der sichtbare Bereich (Widget-Rahmen x/y/w/h)
-       entsteht durch negatives Versetzen und proportionales Skalieren des
-       iframes. `box` = { left, top, scale, pw, ph } (von contentBox). */
+    /* WYSIWYG im iframe: Der iframe-Viewport ist IMMER die feste
+       Inhaltsauflösung (item.cw × item.ch) – der HTML-Code wird in
+       Originalgröße gegen diesen Viewport berechnet und NIE neu umgebrochen.
+       Das gesamte iframe wird als eine Einheit skaliert (Skala = Bildschirm-
+       Skala S × Widget-Skalierung zoom). `box` = { left, top, scale }. */
     function layoutFrame(frame, item, box) {
       if (!frame) return;
-      const b = box || { left: 0, top: 0, scale: 1, pw: 1920, ph: 1080 };
+      const b = box || { left: 0, top: 0, scale: 1 };
       const S = toNum(b.scale, 1);
-      const pw = Math.round(toNum(b.pw, 1920));
-      const ph = Math.round(toNum(b.ph, 1080));
-      frame.style.width = pw + "px";
-      frame.style.height = ph + "px";
-      frame.style.left = (-toNum(item.x, 0) * S) + "px";
-      frame.style.top = (-toNum(item.y, 0) * S) + "px";
-      frame.style.transform = "scale(" + S + ")";
+      const z = clamp(toNum(item.zoom, 1), 0.05, 4);
+      const cw = Math.max(1, Math.round(toNum(item.cw, toNum(item.w, 0))));
+      const ch = Math.max(1, Math.round(toNum(item.ch, toNum(item.h, 0))));
+      frame.style.width = cw + "px";
+      frame.style.height = ch + "px";
+      frame.style.left = "0px";
+      frame.style.top = "0px";
+      frame.style.transform = "scale(" + (S * z) + ")";
       frame.style.transformOrigin = "0 0";
     }
 
@@ -293,7 +300,6 @@ window.Signage = (function () {
       node.style.opacity = String(clamp(toNum(item.opacity, 1), 0, 1));
       layoutFrame(node._frame, item, box);
     }
-
     function frame(item) {
       const f = document.createElement("iframe");
       f.className = "hw-frame";
@@ -307,7 +313,7 @@ window.Signage = (function () {
        Browser-Standardrändern/-scrollen (keine weißen Ränder) und Beobachter
        VOR dem Nutzercode, damit auch Fehler während des Parsens von
        Nutzer-Skripten erfasst werden. Der iframe-Viewport wird über CSS
-       (layoutFrame) auf die feste Projektauflösung gesetzt. */
+       (layoutFrame) auf den Widget-Rahmen (w×h) gesetzt. */
     function srcdoc(html) {
       return "<!doctype html><meta charset=\"utf-8\">"
         + "<style>html,body{margin:0;padding:0;width:100%;height:100%;overflow:hidden;background:transparent;}</style>"
@@ -409,8 +415,8 @@ window.Signage = (function () {
 
     /* Flackerfreie Aktualisierung: neues iframe unsichtbar darüber legen,
        nach dem Laden (oder spätestens nach 8 s) umschalten. Das neue iframe
-       erhält dieselbe feste Arbeitsfläche (Geometrie) wie das alte, damit
-       der Viewport unverändert bleibt. */
+       erhält dieselbe Geometrie (Widget-Rahmen w×h, skaliert) wie das alte,
+       damit der Viewport unverändert bleibt. */
     function refresh(node, item) {
       const old = node._frame;
       clearStatus(node);

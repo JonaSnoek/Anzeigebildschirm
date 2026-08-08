@@ -505,3 +505,41 @@ body.editor-page .layout { min-height: 100vh; }
 @media (max-width: 1000px) {
   .ae-bar-hint { display: none; }
 }
+
+/* ---------- Auto-Slide: Import ---------- */
+.ae-import-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+
+/* ---------- Auto-Slide: Gesamtdauer ---------- */
+.ae-duration-presets { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.ae-dur-btn {
+  padding: 7px 12px;
+  border: 1px solid #232c3a;
+  border-radius: 8px;
+  background: #141b26;
+  color: #c7d2e0;
+  cursor: pointer;
+  font-size: 12.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.ae-dur-btn:hover { background: #1a2431; border-color: #3b4a63; }
+.ae-dur-btn.active { background: #1b2a44; border-color: #2f5cff; color: #7fb2ff; }
+
+/* ---------- Tabelle ---------- */
+.ae-table-cells {
+  font-family: Consolas, Menlo, Monaco, monospace;
+  font-size: 12px;
+  min-height: 120px;
+  white-space: pre;
+}
+.ae-table-actions { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
+.ae-table-actions button {
+  border: 1px solid #232c3a;
+  border-radius: 8px;
+  background: #141b26;
+  color: #c7d2e0;
+  cursor: pointer;
+  padding: 6px 9px;
+  font-size: 12px;
+}
+.ae-table-actions button:hover { background: #1a2431; border-color: #3b4a63; }

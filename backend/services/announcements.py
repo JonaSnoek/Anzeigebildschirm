@@ -1,10 +1,11 @@
 """
-Dienstschicht für Ankündigungsbilder.
+Dienstschicht für Ankündigungsbilder und Auto-Slides (Editor-Medien).
 
-Ein Ankündigungsbild besteht aus zwei Teilen:
+Ein solches Medium besteht aus zwei Teilen:
 
-1. Der fertigen PNG-Datei, die als ganz normales Bildmedium (type="image")
-   in der Medienbibliothek liegt und vom Anzeigebildschirm verwendet wird.
+1. Der fertigen PNG-Datei, die als normales Medienobjekt (type="image"
+   bzw. type="auto_slide") in der Medienbibliothek liegt und vom
+   Anzeigebildschirm verwendet wird.
 2. Der editierbaren Projektdatei (JSON unter uploads/announcements/), die
    alle Bearbeitungsdaten enthält (Texte, Farben, Positionen, Größen,
    Schriftarten, Hintergrundbild, Overlay, Ebenen).
@@ -34,6 +35,11 @@ def announcements_dir() -> Path:
 def project_path(project_file: str) -> Path:
     """Pfad zu einer Projektdatei (Name wird nicht auf Pfad-Seperatoren geprüft)."""
     return announcements_dir() / Path(project_file).name
+
+
+def media_folder(media_type: str) -> Path:
+    """Upload-Ordner eines Medientyps (z. B. uploads/images, uploads/auto_slides)."""
+    return Config.UPLOAD_DIR / Config.UPLOAD_FOLDERS.get(media_type, media_type)
 
 
 def load_project(media: Media) -> dict | None:
@@ -192,15 +198,17 @@ def delete_project(media: Media) -> None:
 
 def duplicate_announcement(source: Media) -> Media:
     """
-    Erstellt eine Kopie eines Ankündigungsbildes inkl. Projektdatei und
-    Hintergrundbild (eigene Dateien, damit Löschen der Kopie das Original
-    nicht beeinträchtigt).
+    Erstellt eine Kopie eines Editor-Projekts (Ankündigungsbild oder
+    Auto-Slide) inkl. Projektdatei, Hintergrundbild und Element-Bildern
+    (eigene Dateien, damit Löschen der Kopie das Original nicht
+    beeinträchtigt). Der Medientyp bleibt erhalten.
     """
     project = load_project(source) or {}
+    media_type = source.type if source.type in ("image", "auto_slide") else "image"
 
     new_png = f"{uuid.uuid4().hex}.png"
-    src_png = Config.UPLOAD_DIR / "images" / source.stored_name
-    dst_png = Config.UPLOAD_DIR / "images" / new_png
+    src_png = media_folder(media_type) / source.stored_name
+    dst_png = media_folder(media_type) / new_png
     if src_png.exists():
         shutil.copy2(src_png, dst_png)
 
@@ -229,26 +237,26 @@ def duplicate_announcement(source: Media) -> Media:
 
     new_project_file = f"{uuid.uuid4().hex}.json"
     copy = Media(
-        type="image",
+        type=media_type,
         name=f"{source.name} (Kopie)",
         stored_name=new_png,
         mime_type="image/png",
         size_bytes=dst_png.stat().st_size if dst_png.exists() else 0,
-        duration=0.0,
+        duration=source.duration or 0.0,
         sort_order=source.sort_order + 1,
         active=True,
         project_file=new_project_file,
     )
     save_project(copy, project)
 
-    # Sprachvarianten des Ankündigungsbildes ebenfalls kopieren (eigene
-    # Dateien, damit das Löschen der Kopie die Originale nicht entfernt).
+    # Sprachvarianten ebenfalls kopieren (eigene Dateien, damit das Löschen
+    # der Kopie die Originale nicht entfernt).
     new_lang = {}
     for lang, name in (source.language_files_dict() or {}).items():
-        src_lang = Config.UPLOAD_DIR / "images" / name
+        src_lang = media_folder(media_type) / name
         if src_lang.exists():
             new_name = f"{uuid.uuid4().hex}{Path(name).suffix}"
-            shutil.copy2(src_lang, Config.UPLOAD_DIR / "images" / new_name)
+            shutil.copy2(src_lang, media_folder(media_type) / new_name)
             new_lang[lang] = new_name
     if new_lang:
         copy.language_files = json.dumps(new_lang)

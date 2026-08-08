@@ -121,6 +121,7 @@ if (mediaPage) {
     image: ".jpg,.jpeg,.png,.gif,.webp",
     video: ".mp4,.webm",
     audio: ".mp3,.wav,.ogg",
+    auto_slide: ".png,.jpg,.jpeg,.webp",
   };
 
   const SVG = {
@@ -150,7 +151,7 @@ if (mediaPage) {
   }
 
   function thumb(m) {
-    if (m.type === "image") return `<img src="${m.url}" alt="" loading="lazy">`;
+    if (m.type === "image" || m.type === "auto_slide") return `<img src="${m.url}" alt="" loading="lazy">`;
     if (m.type === "video") return `<video src="${m.url}" muted preload="metadata"></video>`;
     return `<div class="audio-icon">♪</div>`;
   }
@@ -184,7 +185,9 @@ if (mediaPage) {
               <span class="${m.active === false ? "off" : "on"}">${m.active === false ? "Aus" : "An"}</span>
             </div>
             ${actionButton("preview", "Vorschau", SVG.eye)}
-            ${m.project_file ? actionButton("edit", "Ankündigungsbild bearbeiten", SVG.edit) : ""}
+            ${m.project_file
+              ? actionButton("edit", m.type === "auto_slide" ? "Auto-Slide bearbeiten" : "Ankündigungsbild bearbeiten", SVG.edit)
+              : ""}
             ${actionButton("more", "Weitere Aktionen", SVG.more)}
           </div>
           <div class="media-more-menu">
@@ -192,7 +195,7 @@ if (mediaPage) {
             <button class="media-more-item" data-action="down" ${last ? "" : "disabled"} title="Nach unten verschieben">${SVG.down}Nach unten</button>
             <button class="media-more-item" data-action="duplicate" title="Duplizieren">${SVG.duplicate}Duplizieren</button>
             <button class="media-more-item" data-action="rename" title="Umbenennen">${SVG.rename}Umbenennen</button>
-            <button class="media-more-item" data-action="replace" title="Ersetzen">${SVG.replace}Ersetzen</button>
+            ${m.type === "auto_slide" ? "" : `<button class="media-more-item" data-action="replace" title="Ersetzen">${SVG.replace}Ersetzen</button>`}
             <button class="media-more-item media-more-danger" data-action="delete" title="Löschen">${SVG.delete}Löschen</button>
           </div>
         </div>
@@ -265,14 +268,14 @@ if (mediaPage) {
 
       try {
         if (action === "preview") {
-          const inner = item.type === "image"
+          const inner = item.type === "image" || item.type === "auto_slide"
             ? `<img src="${item.url}" alt="${esc(item.name)}">`
             : item.type === "video"
               ? `<video src="${item.url}" controls autoplay></video>`
               : `<audio src="${item.url}" controls autoplay></audio>`;
           openModal(inner);
         } else if (action === "edit") {
-          window.location.href = `/admin/announcements/${id}/edit`;
+          window.location.href = item.type === "auto_slide" ? `/admin/auto-slides/${id}/edit` : `/admin/announcements/${id}/edit`;
           return;
         } else if (action === "duplicate") {
           const data = await api(`/api/media/${id}/duplicate`, { method: "POST" });

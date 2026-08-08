@@ -1,9 +1,10 @@
 {% extends "base.html" %}
 {% set active = "media" %}
 {% block body_class %}editor-page{% endblock %}
-{% block title %}{{ 'Ankündigungsbild bearbeiten' if media_id else 'Neues Ankündigungsbild' }} · {{ site_name }}{% endblock %}
+{% block title %}{{ 'Auto-Slide bearbeiten' if (media_type == 'auto_slide' and media_id) else ('Neues Auto-Slide' if media_type == 'auto_slide' else ('Ankündigungsbild bearbeiten' if media_id else 'Neues Ankündigungsbild')) }} · {{ site_name }}{% endblock %}
 {% block extra_head %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/announcement_editor.css') }}">
+<script src="{{ url_for('static', filename='js/widgets.js') }}"></script>
 {% endblock %}
 
 {% block content %}
@@ -13,7 +14,7 @@
       <svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
     </a>
     <div class="ae-title-box">
-      <span class="ae-eyebrow">{{ 'Ankündigungsbild bearbeiten' if media_id else 'Neues Ankündigungsbild' }}</span>
+      <span class="ae-eyebrow">{{ 'Auto-Slide bearbeiten' if (media_type == 'auto_slide' and media_id) else ('Neues Auto-Slide' if media_type == 'auto_slide' else ('Ankündigungsbild bearbeiten' if media_id else 'Neues Ankündigungsbild')) }}</span>
       <input type="text" id="ann-name" maxlength="200" value="{{ media_name }}" placeholder="Name der Ankündigung …">
     </div>
     <div class="ae-topbar-actions">
@@ -34,6 +35,21 @@
         <h2 class="ae-section-title">Hinzufügen</h2>
         <div class="ae-add-grid" id="ae-add-grid"></div>
       </div>
+      {% if media_type == 'auto_slide' %}
+      <div class="ae-section">
+        <h2 class="ae-section-title">Import</h2>
+        <div class="ae-import-grid">
+          <button type="button" class="ae-add-btn" id="ae-import-pdf" title="PDF-Seiten zu langer Ansicht zusammensetzen">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M9 13h6M9 17h4"/></svg>
+            <span>PDF importieren</span>
+          </button>
+          <button type="button" class="ae-add-btn" id="ae-import-image" title="Hochformatiges Bild als Grundlage importieren">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="1.6"/><path d="M3 17l5-4 4 3 3-2 6 4"/></svg>
+            <span>Bild importieren</span>
+          </button>
+        </div>
+      </div>
+      {% endif %}
       <div class="ae-section">
         <h2 class="ae-section-title">Ebenen</h2>
         <div class="ae-zop" id="ae-zop">
@@ -79,6 +95,12 @@
         <h2 class="ae-section-title">Eigenschaften</h2>
         <div id="ae-inspector"></div>
       </div>
+      {% if media_type == 'auto_slide' %}
+      <div class="ae-section">
+        <h2 class="ae-section-title">Gesamtdauer</h2>
+        <div id="ae-duration-inspector"></div>
+      </div>
+      {% endif %}
       <div class="ae-section">
         <h2 class="ae-section-title">Hintergrund</h2>
         <div id="ae-bg-inspector"></div>
@@ -108,9 +130,12 @@
 
 <script>
   window.ANNOUNCEMENT_PROJECT = {{ project_json | safe }};
+  window.ANNOUNCEMENT_MEDIA_TYPE = "{{ 'auto_slide' if media_type == 'auto_slide' else 'image' }}";
   window.ANNOUNCEMENT_MEDIA_ID = {{ media_id if media_id is not none else 'null' }};
   window.ANNOUNCEMENT_IS_NEW = {{ 'true' if media_id is none else 'false' }};
   window.ANNOUNCEMENT_BG_PREFIX = "{{ url_for('announcements.background_file', filename='__') }}".replace("__", "");
+  window.ANNOUNCEMENT_STATIC = "{{ url_for('static', filename='') }}";
 </script>
+<script src="{{ url_for('static', filename='vendor/pdfjs/pdf.min.js') }}"></script>
 <script src="{{ url_for('static', filename='js/announcement_editor.js') }}"></script>
 {% endblock %}

@@ -1,11 +1,12 @@
 """
-Ankündigungsbild-Editor: Editor-Seiten und API für das Erstellen und
-Bearbeiten von Ankündigungsbildern.
+Ankündigungsbild- und Auto-Slide-Editor: Editor-Seiten und API für das
+Erstellen und Bearbeiten von Editor-Medien.
 
 Beim Speichern entstehen zwei Dinge:
-- die fertige PNG-Datei als normales Bildmedium (type="image"), das auf dem
-  Anzeigebildschirm wie jedes andere Bild läuft, und
-- die editierbare Projektdatei (JSON), mit der das Bild jederzeit wieder
+- die fertige PNG-Datei als normales Medienobjekt (type="image" für
+  Ankündigungsbilder, type="auto_slide" für Auto-Slides), das auf dem
+  Anzeigebildschirm läuft, und
+- die editierbare Projektdatei (JSON), mit der das Medium jederzeit wieder
   geöffnet und verändert werden kann.
 """
 import json
@@ -38,11 +39,87 @@ MAX_PNG_SIZE = 20 * 1024 * 1024  # gerenderte Ankündigungsbilder: max. 20 MB
 _PNG_EXTS = (".png", ".jpg", ".jpeg")
 
 
-def _default_project() -> dict:
-    """Neues Projekt mit dem festen Design (nur Inhalte sind bearbeitbar)."""
+def _default_project(media_type: str = "image") -> dict:
+    """Neues Projekt mit dem festen Design (nur Inhalte sind bearbeitbar).
+
+    Ankündigungsbilder: 1920×1080. Auto-Slides: hochformatige, vertikal
+    wachsende Arbeitsfläche (1080 breit), Höhe und Gesamtdauer frei.
+    """
+    if media_type == "auto_slide":
+        return {
+            "version": 1,
+            "name": "",
+            "mediaType": "auto_slide",
+            "width": 1080,
+            "height": 3000,
+            "duration": 30,
+            "background": {
+                "file": None,
+                "zoom": 1.0,
+                "offsetX": 0,
+                "offsetY": 0,
+            },
+            "overlay": {
+                "enabled": True,
+                "color": "#000000",
+                "opacity": 0.35,
+            },
+            "title": {
+                "text": "Titel",
+                "font": "Arial Black",
+                "size": 150,
+                "color": "#FFFFFF",
+                "align": "center",
+                "letterSpacing": 2,
+                "x": 540,
+                "y": 700,
+            },
+            "underline": {
+                "enabled": True,
+                "color": "#F4B942",
+                "thickness": 16,
+                "offsetY": 28,
+                "widthPct": 0.8,
+                "height": 60,
+            },
+            "subtitle": {
+                "text": "Untertitel",
+                "font": "Verdana",
+                "size": 52,
+                "color": "#E8E8E8",
+                "align": "center",
+                "lineHeight": 1.25,
+                "letterSpacing": 1,
+                "x": 540,
+                "y": 860,
+            },
+            "info": {
+                "x": 90,
+                "y": 2620,
+                "width": 520,
+                "height": 160,
+                "radius": 30,
+                "brush": True,
+                "bgColor": "#FFFFFF",
+                "opacity": 0.97,
+                "iconColor": "#333333",
+                "textColor": "#222222",
+                "padX": 34,
+                "padY": 22,
+                "rowGap": 18,
+                "iconSize": 46,
+                "date": {"text": "Heute", "font": "Verdana", "size": 44, "weight": "bold"},
+                "location": {"text": "Aula", "font": "Verdana", "size": 44, "weight": "bold"},
+                "dateEnabled": True,
+                "locationEnabled": True,
+            },
+            "grid": {"snap": True, "step": 24},
+            "weather": {"enabled": False, "location": "", "heading": ""},
+        }
     return {
         "version": 1,
         "name": "",
+        "mediaType": "image",
         "width": 1920,
         "height": 1080,
         "background": {
@@ -110,7 +187,7 @@ def _default_project() -> dict:
     }
 
 
-def _render_editor(project: dict, media_id: int | None, name: str) -> str:
+def _render_editor(project: dict, media_id: int | None, name: str, media_type: str = "image") -> str:
     """Rendert die Editor-Seite mit dem eingebetteten Projekt-JSON."""
     # `</` escapen, damit Textinhalte (z. B. aus der Projektdatei) das
     # eingebettete <script>-Tag nicht verlassen können.
@@ -120,6 +197,7 @@ def _render_editor(project: dict, media_id: int | None, name: str) -> str:
         project_json=embedded,
         media_id=media_id,
         media_name=name,
+        media_type=media_type,
         active="media",
     )
 
@@ -128,7 +206,7 @@ def _render_editor(project: dict, media_id: int | None, name: str) -> str:
 @roles_required("admin", "editor")
 def editor_new():
     """Öffnet den Editor für ein neues Ankündigungsbild."""
-    return _render_editor(_default_project(), None, "")
+    return _render_editor(_default_project("image"), None, "", "image")
 
 
 @bp.get("/admin/announcements/<int:media_id>/edit")
@@ -138,8 +216,26 @@ def editor_edit(media_id):
     media = db.session.get(Media, media_id)
     if media is None or media.type != "image" or not media.project_file:
         abort(404)
-    project = load_project(media) or _default_project()
-    return _render_editor(project, media.id, media.name)
+    project = load_project(media) or _default_project("image")
+    return _render_editor(project, media.id, media.name, "image")
+
+
+@bp.get("/admin/auto-slides/new")
+@roles_required("admin", "editor")
+def auto_slide_new():
+    """Öffnet den Editor für ein neues Auto-Slide (hochformatige Folie)."""
+    return _render_editor(_default_project("auto_slide"), None, "", "auto_slide")
+
+
+@bp.get("/admin/auto-slides/<int:media_id>/edit")
+@roles_required("admin", "editor")
+def auto_slide_edit(media_id):
+    """Öffnet den Editor für ein vorhandenes Auto-Slide."""
+    media = db.session.get(Media, media_id)
+    if media is None or media.type != "auto_slide" or not media.project_file:
+        abort(404)
+    project = load_project(media) or _default_project("auto_slide")
+    return _render_editor(project, media.id, media.name, "auto_slide")
 
 
 @bp.get("/api/announcements/bg/<path:filename>")
@@ -244,15 +340,21 @@ def _counts() -> dict:
     return {media_type: int(count) for media_type, count in rows}
 
 
-def _store_png(file_storage) -> tuple[str | None, str | None]:
+def _type_folder(media_type: str) -> Path:
+    """Upload-Ordner eines Editor-Projekt-Medientyps (images | auto_slides)."""
+    folder = Config.UPLOAD_DIR / Config.UPLOAD_FOLDERS.get(media_type, media_type)
+    folder.mkdir(parents=True, exist_ok=True)
+    return folder
+
+
+def _store_png(file_storage, media_type: str = "image") -> tuple[str | None, str | None]:
     """Speichert das gerenderte PNG als Bildmedium-Datei (ohne DB)."""
     if file_storage is None or not file_storage.filename:
         return None, "Kein gerendertes Bild übermittelt."
     ext = Path(file_storage.filename or "").suffix.lower()
     if ext not in _PNG_EXTS:
-        return None, "Ungültiges Bildformat für das Ankündigungsbild."
-    folder = Config.UPLOAD_DIR / "images"
-    folder.mkdir(parents=True, exist_ok=True)
+        return None, "Ungültiges Bildformat für den Editor."
+    folder = _type_folder(media_type)
     stored_name = f"{uuid.uuid4().hex}{ext}"
     destination = folder / stored_name
     size = 0
@@ -305,32 +407,51 @@ def _project_languages(project: dict) -> list:
     return languages
 
 
-def _unlink_png(stored_name: str | None) -> None:
-    """Entfernt eine PNG-Datei unter uploads/images (falls vorhanden)."""
+def _unlink_png(stored_name: str | None, media_type: str = "image") -> None:
+    """Entfernt eine gerenderte PNG-Datei des Editors (falls vorhanden)."""
     if not stored_name:
         return
     try:
-        (Config.UPLOAD_DIR / "images" / Path(stored_name).name).unlink(missing_ok=True)
+        (_type_folder(media_type) / Path(stored_name).name).unlink(missing_ok=True)
     except OSError:
         pass
+
+
+def _media_type(request, project: dict) -> str:
+    """Medientyp aus Formular (Vorrang) oder Projekt-JSON, validiert."""
+    media_type = (
+        request.form.get("media_type")
+        or project.get("mediaType")
+        or "image"
+    )
+    if media_type not in ("image", "auto_slide"):
+        return "image"
+    return media_type
 
 
 @bp.post("/api/announcements")
 @roles_required("admin", "editor")
 def create():
-    """Erstellt ein neues Ankündigungsbild (multipart: file [+ file_<lang>] + project [+ background])."""
+    """Erstellt ein neues Editor-Medium (multipart: file [+ file_<lang>] + project [+ background]).
+
+    Der Medientyp (image | auto_slide) kommt aus dem Formularfeld
+    "media_type" (bzw. dem Projekt-JSON). Auto-Slides landen unter
+    uploads/auto_slides und tragen ihre Gesamtdauer in media.duration.
+    """
     project, error = _parse_project(request.form.get("project"))
     if error:
         return jsonify({"error": error}), 400
 
-    name = (request.form.get("name") or "").strip() or (project.get("name") or "").strip() or "Ankündigungsbild"
-    stored_name, error = _store_png(request.files.get("file"))
+    media_type = _media_type(request, project)
+    default_name = "Auto-Slide" if media_type == "auto_slide" else "Ankündigungsbild"
+    name = (request.form.get("name") or "").strip() or (project.get("name") or "").strip() or default_name
+    stored_name, error = _store_png(request.files.get("file"), media_type)
     if error:
         return jsonify({"error": error}), 400
 
     bg_error = _apply_background(project, request.files.get("background"))
     if bg_error:
-        _unlink_png(stored_name)
+        _unlink_png(stored_name, media_type)
         return jsonify({"error": bg_error}), 400
 
     # Sprachvarianten (außer Standardsprache) zusätzlich ablegen
@@ -342,23 +463,25 @@ def create():
             continue
         f = request.files.get("file_" + lang)
         if f is not None and f.filename:
-            lang_name, error = _store_png(f)
+            lang_name, error = _store_png(f, media_type)
             if error:
                 for n in [stored_name] + list(lang_files.values()):
-                    _unlink_png(n)
+                    _unlink_png(n, media_type)
                 return jsonify({"error": error}), 400
             lang_files[lang] = lang_name
 
     project["name"] = name
+    project["mediaType"] = media_type
     max_order = db.session.execute(
         select(func.coalesce(func.max(Media.sort_order), 0))
     ).scalar()
     media = Media(
-        type="image",
+        type=media_type,
         name=name[:200],
         stored_name=stored_name,
         mime_type="image/png",
-        size_bytes=(Config.UPLOAD_DIR / "images" / stored_name).stat().st_size,
+        size_bytes=(_type_folder(media_type) / stored_name).stat().st_size,
+        duration=float(project.get("duration") or 0) if media_type == "auto_slide" else 0.0,
         sort_order=int(max_order) + 1,
         active=True,
         project_file=f"{uuid.uuid4().hex}.json",
@@ -374,18 +497,20 @@ def create():
 @bp.post("/api/announcements/<int:media_id>")
 @roles_required("admin", "editor")
 def update(media_id):
-    """Speichert ein vorhandenes Ankündigungsbild erneut (multipart)."""
+    """Speichert ein vorhandenes Editor-Medium erneut (multipart)."""
     media = db.session.get(Media, media_id)
-    if media is None or media.type != "image" or not media.project_file:
-        return jsonify({"error": "Ankündigungsbild nicht gefunden."}), 404
+    if media is None or media.type not in ("image", "auto_slide") or not media.project_file:
+        return jsonify({"error": "Medienprojekt nicht gefunden."}), 404
+    media_type = media.type
 
     project, error = _parse_project(request.form.get("project"))
     if error:
         return jsonify({"error": error}), 400
     if "width" not in project:
-        project["width"] = 1920
+        project["width"] = 1080 if media_type == "auto_slide" else 1920
     if "height" not in project:
-        project["height"] = 1080
+        project["height"] = 3000 if media_type == "auto_slide" else 1080
+    project["mediaType"] = media_type
 
     languages = _project_languages(project)
     default_lang = languages[0]
@@ -405,12 +530,12 @@ def update(media_id):
 
     def rollback():
         for n in stored:
-            _unlink_png(n)
+            _unlink_png(n, media_type)
         if new_bg and new_bg != old_bg:
             delete_background(new_bg)
             project.setdefault("background", {})["file"] = old_bg
 
-    stored_name, error = _store_png(request.files.get("file"))
+    stored_name, error = _store_png(request.files.get("file"), media_type)
     if error:
         rollback()
         return jsonify({"error": error}), 400
@@ -423,7 +548,7 @@ def update(media_id):
             continue
         f = request.files.get("file_" + lang)
         if f is not None and f.filename:
-            lang_name, error = _store_png(f)
+            lang_name, error = _store_png(f, media_type)
             if error:
                 rollback()
                 return jsonify({"error": error}), 400
@@ -433,10 +558,10 @@ def update(media_id):
             lang_files[lang] = old_lang_files[lang]  # bestehende Variante behalten
 
     # Erfolg: alte Dateien entfernen
-    _unlink_png(media.stored_name)
+    _unlink_png(media.stored_name, media_type)
     for lang, old_name in old_lang_files.items():
         if lang_files.get(lang) != old_name:
-            _unlink_png(old_name)
+            _unlink_png(old_name, media_type)
     if old_bg and old_bg != new_bg:
         delete_background(old_bg)
 
@@ -445,7 +570,8 @@ def update(media_id):
     media.name = name[:200]
     media.stored_name = stored_name
     media.mime_type = "image/png"
-    media.size_bytes = (Config.UPLOAD_DIR / "images" / stored_name).stat().st_size
+    media.size_bytes = (_type_folder(media_type) / stored_name).stat().st_size
+    media.duration = float(project.get("duration") or 0) if media_type == "auto_slide" else 0.0
     media.language_files = json.dumps(lang_files) if lang_files else ""
     db.session.commit()
     save_project(media, project)
@@ -456,10 +582,10 @@ def update(media_id):
 @bp.get("/api/announcements/<int:media_id>")
 @roles_required("admin", "editor")
 def get_project(media_id):
-    """Liefert die Projektdatei eines Ankündigungsbildes."""
+    """Liefert die Projektdatei eines Editor-Mediums (Ankündigungsbild/Auto-Slide)."""
     media = db.session.get(Media, media_id)
-    if media is None or media.type != "image" or not media.project_file:
-        return jsonify({"error": "Ankündigungsbild nicht gefunden."}), 404
+    if media is None or media.type not in ("image", "auto_slide") or not media.project_file:
+        return jsonify({"error": "Medienprojekt nicht gefunden."}), 404
     project = load_project(media)
     if project is None:
         return jsonify({"error": "Projektdatei fehlt."}), 404

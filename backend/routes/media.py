@@ -157,7 +157,7 @@ def duplicate(media_id):
         import uuid
         from pathlib import Path
 
-        folder = Config.UPLOAD_DIR / media.type
+        folder = Config.UPLOAD_DIR / Config.UPLOAD_FOLDERS.get(media.type, media.type)
         new_stored = f"{uuid.uuid4().hex}{Path(media.stored_name).suffix}"
         src = folder / media.stored_name
         dst = folder / new_stored

@@ -24,6 +24,10 @@ uploads/audio/*
 uploads/announcements/*
 !uploads/announcements/.gitkeep
 
+# Auto-Slides: gerenderte Hochformat-PNGs (nur .gitkeep behalten)
+uploads/auto_slides/*
+!uploads/auto_slides/.gitkeep
+
 # Logs & Betriebssystem
 *.log
 .DS_Store

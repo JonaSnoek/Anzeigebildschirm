@@ -21,7 +21,7 @@
   const page = document.getElementById("announcement-page");
   if (!page) return;
 
-  const W = 1920, H = 1080;
+  let W = 1920, H = 1080;
   const mediaId = window.ANNOUNCEMENT_MEDIA_ID || null;
   const isNew = window.ANNOUNCEMENT_IS_NEW !== false;
   const bgPrefix = window.ANNOUNCEMENT_BG_PREFIX || "/api/announcements/bg/";
@@ -553,20 +553,71 @@
   }
   function htmlEl(over) {
     const o = over || {};
-    return Object.assign({
+    const el = Object.assign({
       id: uid(), type: "html", x: 100, y: 100, w: 560, h: 300, rotation: 0, opacity: 1,
       name: o.name != null ? String(o.name) : "HTML-Widget",
       html: o.html != null ? String(o.html) : "",
       refresh: o.refresh !== false,
       interval: num(o.interval, 5),
     }, o);
+    /* WYSIWYG: feste Inhaltsauflösung (cw×ch) + Skalierungsfaktor (zoom).
+       Der iframe-Viewport ist immer cw×ch; w/h = cw·zoom × ch·zoom. Das
+       komplette Widget wird dadurch wie ein Bild skaliert (kein Umbruch). */
+    el.cw = Math.max(1, Math.round(num(el.cw, el.w)));
+    el.ch = Math.max(1, Math.round(num(el.ch, el.h)));
+    el.zoom = clamp(num(el.zoom, 1), 0.05, 4);
+    el.w = Math.max(12, Math.round(el.cw * el.zoom));
+    el.h = Math.max(12, Math.round(el.ch * el.zoom));
+    return el;
+  }
+  function defaultTableCells(rows, cols, prefix) {
+    const out = [];
+    for (let r = 0; r < rows; r++) {
+      const row = [];
+      for (let c = 0; c < cols; c++) row.push(prefix + (r + 1) + "-" + (c + 1));
+      out.push(row);
+    }
+    return out;
+  }
+  function tableEl(over) {
+    const o = over || {};
+    const rows = clamp(Math.round(num(o.rows, 3)), 1, 40);
+    const cols = clamp(Math.round(num(o.columns, 3)), 1, 20);
+    const legacy = Array.isArray(o.data) ? o.data : null;
+    const data = (o.data && typeof o.data === "object" && !Array.isArray(o.data))
+      ? Object.assign({}, o.data)
+      : { [DEFAULT_LANG]: legacy || defaultTableCells(rows, cols, "Zelle") };
+    if (!data[DEFAULT_LANG] || !Array.isArray(data[DEFAULT_LANG])) {
+      data[DEFAULT_LANG] = legacy || defaultTableCells(rows, cols, "Zelle");
+    }
+    return Object.assign({
+      id: uid(), type: "table", x: 100, y: 100, w: 880, h: 420, rotation: 0, opacity: 1,
+      rows: rows, columns: cols,
+      header: true,
+      font: "Verdana", fontSize: 32, textColor: "#FFFFFF",
+      headerColor: "#F4B942", headerTextColor: "#0b1220",
+      rowColor: "#0b1220", rowColor2: "#152033",
+      borderColor: "rgba(255,255,255,.16)", borderWidth: 2,
+      radius: 18, pad: 14, align: "center",
+    }, o, { data });
   }
 
   /* ------------------------------------------------------------------ *
    *  Migration alter Projektversionen (v1 -> v2)
    * ------------------------------------------------------------------ */
   function migrateProject(p) {
+    const isAuto = window.ANNOUNCEMENT_MEDIA_TYPE === "auto_slide";
+    const defW = isAuto ? 1080 : 1920;
+    const defH = isAuto ? 3000 : 1080;
+    const pw = clamp(Math.round(num(p && p.width, defW)), 120, 4096);
+    const ph = clamp(Math.round(num(p && p.height, defH)), 120, 60000);
+    W = pw;
+    H = ph;
     if (p && p.version === 2 && Array.isArray(p.elements)) {
+      if (p.width == null) p.width = W;
+      if (p.height == null) p.height = H;
+      if (p.mediaType == null) p.mediaType = isAuto ? "auto_slide" : "image";
+      if (p.duration == null) p.duration = 30;
       normalizeLocalization(p);
       return p;
     }
@@ -643,6 +694,8 @@
     const out = {
       version: 2,
       name: p.name || "",
+      mediaType: isAuto ? "auto_slide" : "image",
+      duration: p.duration != null ? num(p.duration, 30) : 30,
       width: W, height: H,
       background: bg.file
         ? { file: bg.file, zoom: num(bg.zoom, 1), offsetX: num(bg.offsetX, 0), offsetY: num(bg.offsetY, 0), color: "#182332", color2: "#0b0e14" }
@@ -745,6 +798,14 @@
   /* Fehlt die Übersetzung der aktuellen Bearbeitungssprache, obwohl in
      einer anderen Sprache Inhalt hinterlegt ist? (Editor-Kennzeichnung.) */
   function missingCurrentTranslation(el) {
+    if (el.type === "table") {
+      const d = el.data;
+      if (!d || typeof d !== "object" || Array.isArray(d)) return false;
+      const hasAny = EDITOR_LANGS.some((l) => Array.isArray(d[l]) && d[l].some((row) => Array.isArray(row) && row.some((v) => v != null && String(v).trim() !== "")));
+      const cur = Array.isArray(d[editorLang]) ? d[editorLang] : [];
+      const hasCur = cur.some((row) => Array.isArray(row) && row.some((v) => v != null && String(v).trim() !== ""));
+      return hasAny && !hasCur;
+    }
     const key = el.type === "text" ? "text" : el.type === "weather" ? "location" : null;
     if (!key) return false;
     const map = el[key + "s"];
@@ -1292,6 +1353,7 @@
       case "icon": return drawIconOn(c, el);
       case "weather": return drawWeatherOn(c, el);
       case "qrcode": return drawQrOn(c, el);
+      case "table": return drawTableOn(c, el);
       default: return;
     }
   }
@@ -1349,6 +1411,139 @@
     const ox = -dirY / len, oy = dirX / len;
     pos.rotate = [pos.n[0] + ox * 46, pos.n[1] + oy * 46];
     return pos;
+  }
+
+  let tableEditTimer = null;
+
+  /* Tabellen-Zellen: mehrsprachige 2D-Matrix (editorLang -> default -> legacy). */
+  function tableCells(el) {
+    const rows = clamp(Math.round(num(el.rows, 3)), 1, 40);
+    const cols = clamp(Math.round(num(el.columns, 3)), 1, 20);
+    const d = el.data;
+    let map = d && typeof d === "object" && !Array.isArray(d) ? d : { [DEFAULT_LANG]: Array.isArray(d) ? d : null };
+    const cur = (map[editorLang] && Array.isArray(map[editorLang]))
+      ? map[editorLang]
+      : (map[DEFAULT_LANG] && Array.isArray(map[DEFAULT_LANG]) ? map[DEFAULT_LANG] : []);
+    const out = [];
+    for (let r = 0; r < rows; r++) {
+      const src = cur[r] || [];
+      const row = [];
+      for (let c = 0; c < cols; c++) row.push(src[c] != null ? String(src[c]) : "");
+      out.push(row);
+    }
+    return out;
+  }
+
+  function tableMap(el) {
+    if (!el.data || typeof el.data !== "object" || Array.isArray(el.data)) {
+      el.data = { [DEFAULT_LANG]: Array.isArray(el.data) ? el.data : defaultTableCells(clamp(Math.round(num(el.rows, 3)), 1, 40), clamp(Math.round(num(el.columns, 3)), 1, 20), "Zelle") };
+    }
+    if (!Array.isArray(el.data[DEFAULT_LANG])) {
+      el.data[DEFAULT_LANG] = defaultTableCells(clamp(Math.round(num(el.rows, 3)), 1, 40), clamp(Math.round(num(el.columns, 3)), 1, 20), "Zelle");
+    }
+    return el.data;
+  }
+
+  function resizeTable(el, rows, cols) {
+    el.rows = clamp(Math.round(rows), 1, 40);
+    el.columns = clamp(Math.round(cols), 1, 20);
+    const map = tableMap(el);
+    for (const lang of EDITOR_LANGS) {
+      if (!Array.isArray(map[lang])) continue;
+      const out = [];
+      for (let r = 0; r < el.rows; r++) {
+        const src = map[lang][r] || [];
+        const row = [];
+        for (let c = 0; c < el.columns; c++) row.push(src[c] != null ? src[c] : "");
+        out.push(row);
+      }
+      map[lang] = out;
+    }
+  }
+
+  function setTableCell(el, r, c, value) {
+    const map = tableMap(el);
+    if (!Array.isArray(map[editorLang])) {
+      // Neue Sprache startet als Kopie der Standardsprache – unübersetzte
+      // Zellen bleiben dadurch sichtbar (Fallback), statt Platzhalter zu zeigen.
+      map[editorLang] = Array.isArray(map[DEFAULT_LANG])
+        ? map[DEFAULT_LANG].map((row) => row.slice())
+        : defaultTableCells(el.rows, el.columns, "Zelle");
+    }
+    const row = map[editorLang][r] || (map[editorLang][r] = []);
+    row[c] = String(value);
+  }
+
+  function drawTableOn(c, el) {
+    c.save();
+    c.translate(el.x + el.w / 2, el.y + el.h / 2);
+    c.rotate((num(el.rotation, 0) * Math.PI) / 180);
+    c.translate(-el.w / 2, -el.h / 2);
+    c.globalAlpha = clamp(num(el.opacity, 1), 0, 1);
+
+    const rows = clamp(Math.round(num(el.rows, 3)), 1, 40);
+    const cols = clamp(Math.round(num(el.columns, 3)), 1, 20);
+    const data = tableCells(el);
+    const colW = el.w / cols;
+    const rowH = el.h / rows;
+    const hasHeader = el.header !== false;
+    const radius = clamp(num(el.radius, 18), 0, Math.min(el.w, el.h) / 2);
+    const pad = clamp(num(el.pad, 14), 2, 60);
+    const fs = clamp(num(el.fontSize, 32), 8, 200);
+    const font = el.font || "Verdana";
+    const textColor = el.textColor || "#FFFFFF";
+    const headerColor = el.headerColor || "#F4B942";
+    const headerTextColor = el.headerTextColor || "#0b1220";
+    const rowColor = el.rowColor || "#0b1220";
+    const rowColor2 = el.rowColor2 || "#152033";
+    const borderColor = el.borderColor || "rgba(255,255,255,.16)";
+    const borderWidth = clamp(num(el.borderWidth, 2), 0, 12);
+    const align = el.align || "center";
+
+    if (radius > 0) { roundedRectPath(c, 0, 0, el.w, el.h, radius); c.clip(); }
+
+    for (let r = 0; r < rows; r++) {
+      const y = r * rowH;
+      const headerRow = hasHeader && r === 0;
+      const bg = headerRow ? headerColor : ((r % 2 === 1) ? rowColor2 : rowColor);
+      c.fillStyle = bg;
+      c.fillRect(0, y, el.w, rowH);
+      const rowData = data[r] || [];
+      for (let ci = 0; ci < cols; ci++) {
+        const cell = rowData[ci];
+        if (cell == null || String(cell).trim() === "") continue;
+        const cellFont = (headerRow ? "bold " : "") + fs + "px " + font;
+        c.font = cellFont;
+        c.fillStyle = headerRow ? headerTextColor : textColor;
+        c.textBaseline = "alphabetic";
+        c.textAlign = "left";
+        const maxW = Math.max(20, colW - pad * 2);
+        const lines = wrapText(c, String(cell), cellFont, 0, maxW);
+        const lh = fs * 1.25;
+        const textH = lines.length * lh;
+        const ty = y + rowH / 2 - textH / 2;
+        for (let li = 0; li < lines.length; li++) {
+          const lineW = tWidth(c, lines[li], cellFont, 0);
+          let x0 = ci * colW + pad;
+          if (align === "center") x0 = ci * colW + (colW - lineW) / 2;
+          else if (align === "right") x0 = ci * colW + colW - pad - lineW;
+          c.fillText(lines[li], x0, ty + li * lh + fs * 0.82);
+        }
+      }
+    }
+
+    if (borderWidth > 0) {
+      c.strokeStyle = borderColor;
+      c.lineWidth = borderWidth;
+      c.beginPath();
+      for (let r = 1; r < rows; r++) { const y = r * rowH; c.moveTo(0, y); c.lineTo(el.w, y); }
+      for (let ci = 1; ci < cols; ci++) { const x = ci * colW; c.moveTo(x, 0); c.lineTo(x, el.h); }
+      c.stroke();
+      if (radius > 0) roundedRectPath(c, 0, 0, el.w, el.h, radius);
+      else { c.beginPath(); c.rect(0, 0, el.w, el.h); }
+      c.stroke();
+    }
+    c.restore();
   }
 
   function drawSelectionOn(c, el) {
@@ -1462,14 +1657,14 @@
     frame.setAttribute("scrolling", "no");
     frame.setAttribute("frameborder", "0");
     frame.srcdoc = widgetSrcdoc(html);
-    /* Feste Arbeitsfläche (Projektauflösung): Der iframe-Viewport ist immer
-       die volle Arbeitsfläche, der sichtbare Bereich entsteht durch
-       negatives Versetzen + proportionales Skalieren (siehe widgets.js). */
-    const z = view.zoom;
-    frame.style.width = W + "px";
-    frame.style.height = H + "px";
-    frame.style.left = (-num(el.x, 0) * z) + "px";
-    frame.style.top = (-num(el.y, 0) * z) + "px";
+    /* WYSIWYG-Widget: Der iframe-Viewport ist immer die feste Inhaltsauflösung
+       (cw×ch), das gesamte iframe wird als eine Einheit mit dem Faktor
+       Widget-Zoom × Editor-Zoom skaliert (siehe widgets.js layoutFrame). */
+    const z = num(el.zoom, 1) * view.zoom;
+    frame.style.width = Math.max(1, Math.round(num(el.cw, el.w))) + "px";
+    frame.style.height = Math.max(1, Math.round(num(el.ch, el.h))) + "px";
+    frame.style.left = "0px";
+    frame.style.top = "0px";
     frame.style.transform = "scale(" + z + ")";
     frame.style.transformOrigin = "0 0";
     if (old && old.parentNode === node) {
@@ -1519,7 +1714,7 @@
     widgetLayer.style.display = exporting ? "none" : "block";
     if (exporting) return;
     const z = view.zoom;
-    const box = { left: 0, top: 0, scale: z, pw: W, ph: H };
+    const box = { left: 0, top: 0, scale: z };
     const seen = new Set();
     for (const el of project.elements) {
       if (el.type !== "html") continue;
@@ -1683,7 +1878,10 @@
 
     const minW = el.type === "text" ? 40 : 12;
     const minH = el.type === "text" ? 24 : 12;
-    if (drag.shift && (el.type === "image" || el.type === "icon")) {
+    /* HTML-Widgets werden IMMER proportional skaliert (wie ein Bild): Das
+       komplette Widget (Inhalt, Schrift, Layout) bleibt eine Einheit, es wird
+       lediglich die Skalierung zoom verändert – kein Umbrechen. */
+    if ((drag.shift || el.type === "html") && (el.type === "image" || el.type === "icon" || el.type === "html")) {
       const aspect = start.w / start.h;
       const growW = left || right;
       if (growW) { lh = lw / aspect; if (top) ly = frame.h - lh; }
@@ -1707,6 +1905,15 @@
     el.y = tl.y;
     el.w = lw;
     el.h = lh;
+    if (el.type === "html") {
+      /* Inhalt (cw×ch) bleibt unverändert, nur die Skalierung zoom ändert
+         sich – w/h werden exakt aus cw/ch·zoom abgeleitet. */
+      const cw = Math.max(1, num(el.cw, start.w) || 1);
+      const ch = Math.max(1, num(el.ch, start.h) || 1);
+      el.zoom = clamp(lw / cw, 0.05, 4);
+      el.w = Math.max(minW, Math.round(cw * el.zoom));
+      el.h = Math.max(minH, Math.round(ch * el.zoom));
+    }
     if (el.type === "icon") el.size = lh;
     return g;
   }
@@ -1796,6 +2003,7 @@
     try { canvas.releasePointerCapture(e.pointerId); } catch (err) {}
     drag = null;
     guides = [];
+    growToFit();
     render();
   };
   canvas.addEventListener("pointerup", endDrag);
@@ -1886,6 +2094,7 @@
     selectedId = copy.id;
     renderLayers();
     renderInspector();
+    growToFit();
     render();
   }
 
@@ -1908,6 +2117,7 @@
     { type: "weather", label: "Wetter-Widget", svg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 10.5a4 4 0 0 0-7.5-1.6A3.5 3.5 0 0 0 10 15h8a3.5 3.5 0 0 0 0-4.5zM9 6V4 M6.5 8.5L5 7 M6 13H4"/></svg>' },
     { type: "qrcode", label: "QR-Code", svg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3 M20 14v3 M14 20h3"/></svg>' },
     { type: "html", label: "HTML-Widget", svg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6l-5 6 5 6M16 6l5 6-5 6M13.5 4.5l-3 15"/></svg>' },
+    { type: "table", label: "Tabelle", svg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18 M10 10v9"/></svg>' },
   ];
 
   /* ------------------------------------------------------------------ *
@@ -2012,6 +2222,7 @@
     selectedId = el.id;
     renderLayers();
     renderInspector();
+    growToFit();
     loadImage(file);
   }
 
@@ -2063,6 +2274,9 @@
       case "html":
         el = htmlEl({ x: cw(560), y: ch(300), w: 560, h: 300 });
         break;
+      case "table":
+        el = tableEl({ x: cw(880), y: ch(420), w: 880, h: 420 });
+        break;
       default:
         return;
     }
@@ -2070,6 +2284,7 @@
     selectedId = el.id;
     renderLayers();
     renderInspector();
+    growToFit();
     render();
   }
 
@@ -2089,6 +2304,7 @@
         selectedId = el.id;
         renderLayers();
         renderInspector();
+        growToFit();
         loadImage(data.file);
       })
       .catch((err) => { if (window.toast) window.toast(err.message, "error"); });
@@ -2112,10 +2328,11 @@
    *  Ebenen
    * ------------------------------------------------------------------ */
   const TYPE_LABELS = {
-    text: "Text", shape: "Form", image: "Bild", icon: "Icon", weather: "Wetter", qrcode: "QR-Code", html: "HTML-Widget",
+    text: "Text", shape: "Form", image: "Bild", icon: "Icon", weather: "Wetter", qrcode: "QR-Code", html: "HTML-Widget", table: "Tabelle",
   };
   const TYPE_ICON = {
     text: "T", shape: "▭", image: iconSvg("camera", 14), icon: iconSvg("star", 14), weather: iconSvg("info", 14), qrcode: iconSvg("arrow", 14), html: "<>",
+    table: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 5h18v14H3z M3 10h18 M10 10v9"/></svg>',
   };
   function layerLabel(el) {
     if (el.type === "text") {
@@ -2130,6 +2347,11 @@
     if (el.type === "icon") return ICON_LABELS[el.icon] || "Icon";
     if (el.type === "weather") return "Wetter-Widget";
     if (el.type === "qrcode") return "QR-Code";
+    if (el.type === "table") {
+      const first = tableCells(el).find((row) => row.some((v) => String(v).trim() !== ""));
+      const cell = first && first.find((v) => String(v).trim() !== "");
+      return (cell != null && String(cell).trim()) ? String(cell).trim().slice(0, 24) : "Tabelle";
+    }
     if (el.type === "html") {
       const n = (el.name != null ? String(el.name) : "").trim();
       return n || "HTML-Widget";
@@ -2234,6 +2456,7 @@
     else if (el.type === "weather") html += weatherControls(el);
     else if (el.type === "qrcode") html += qrControls(el);
     else if (el.type === "html") html += htmlControls(el);
+    else if (el.type === "table") html += tableControls(el);
 
     html += `<div class="ae-insp-sub">Position &amp; Größe</div>`;
     html += `<div class="ae-num-grid">
@@ -2454,6 +2677,15 @@
   }
 
   function htmlControls(el) {
+    /* Bestehende Projekte (ohne cw/ch/zoom): Inhaltsauflösung = aktuelle
+       Rahmenbreite/-höhe, Skalierung = 100 % – Darstellung bleibt identisch. */
+    if (!isFinite(num(el.cw, NaN)) || !isFinite(num(el.ch, NaN)) || !isFinite(num(el.zoom, NaN))) {
+      const w = Math.max(1, Math.round(num(el.w, 560) || 560));
+      const h = Math.max(1, Math.round(num(el.h, 300) || 300));
+      if (!isFinite(num(el.cw, NaN))) el.cw = w;
+      if (!isFinite(num(el.ch, NaN))) el.ch = h;
+      if (!isFinite(num(el.zoom, NaN))) el.zoom = clamp(w / el.cw, 0.05, 4);
+    }
     let h = "";
     h += inputRow("name", "Name", "HTML-Widget");
     h += textRow("html", "HTML-Code", "<div>…</div>", 10);
@@ -2462,9 +2694,56 @@
     h += checkRow("Automatische Aktualisierung", "refresh");
     h += numField("interval", "Intervall (Min.)");
     h += `<div class="ae-hint">Beim Anzeigen geladen, danach in diesem Intervall neu initialisiert – flackerfrei (Standard: 5 Minuten).</div>`;
+    h += `<div class="ae-insp-sub">Skalierung</div>`;
+    h += rangeRow("zoom", "Skalierung", 5, 400, 1, "%");
+    h += `<div class="ae-hint">Vergrößert/verkleinert das komplette Widget proportional – Inhalt, Schrift und Layout bleiben unverändert (wie bei einem Bild). Breite/Höhe ändern sich entsprechend mit.</div>`;
     h += `<div class="ae-insp-sub">Vorschau</div>`;
     h += `<button type="button" class="ae-btn ae-widget-reload" data-act="reload-widget">🔄 Widget neu laden</button>`;
     h += `<div class="ae-hint">Lädt das Widget sofort neu (z. B. nach einer Code-Änderung oder um externe Daten frisch abzurufen). Fehlerhafte Widgets zeigen statt einer leeren Fläche eine Meldung.</div>`;
+    return h;
+  }
+
+  function tableCellsText(el) {
+    const data = tableCells(el);
+    return data.map((row) => row.join("\t")).join("\n");
+  }
+
+  function tableControls(el) {
+    let h = "";
+    h += `<div class="ae-insp-sub">Sprache</div>`;
+    h += langTabs();
+    if (missingCurrentTranslation(el)) h += missingBadge();
+    h += `<div class="ae-num-grid">
+      <div class="ae-field"><label>Zeilen</label><input type="number" data-table-dims="rows" min="1" max="40" value="${Math.round(num(el.rows, 3))}"></div>
+      <div class="ae-field"><label>Spalten</label><input type="number" data-table-dims="cols" min="1" max="20" value="${Math.round(num(el.columns, 3))}"></div>
+    </div>`;
+    h += `<div class="ae-table-actions">
+      <button type="button" data-table-op="add-row" title="Zeile unten hinzufügen">+ Zeile</button>
+      <button type="button" data-table-op="del-row" title="Letzte Zeile löschen">− Zeile</button>
+      <button type="button" data-table-op="add-col" title="Spalte rechts hinzufügen">+ Spalte</button>
+      <button type="button" data-table-op="del-col" title="Letzte Spalte löschen">− Spalte</button>
+    </div>`;
+    h += `<div class="ae-field"><label>Inhalt (${esc(LANG_LABELS[editorLang])}) – Zellen durch TAB, Zeilen durch Zeilenumbruch</label>
+      <textarea id="ae-table-cells" class="ae-table-cells" rows="9" spellcheck="false">${esc(tableCellsText(el))}</textarea></div>`;
+    h += `<div class="ae-table-actions">
+      <button type="button" data-table-op="load-file">Aus Datei laden (CSV/TSV)</button>
+      <input type="file" id="ae-table-file" accept=".csv,.tsv,.txt" style="display:none">
+    </div>`;
+    h += `<div class="ae-hint">Kommt in einer Zeile kein TAB vor, wird nach Komma getrennt. Änderungen übernehmen die Zeilen-/Spaltenzahl automatisch.</div>`;
+    h += `<div class="ae-insp-sub">Aussehen</div>`;
+    h += selectRow("font", "Schriftart", FONTS.map((f) => [f, f]));
+    h += rangeRow("fontSize", "Schriftgröße", 8, 200, 1, "px");
+    h += colorRow("textColor", "Textfarbe");
+    h += colorRow("headerColor", "Kopf-Zeilenfarbe");
+    h += colorRow("headerTextColor", "Kopf-Textfarbe");
+    h += colorRow("rowColor", "Zeilenfarbe");
+    h += colorRow("rowColor2", "Wechsel-Farbe");
+    h += colorRow("borderColor", "Linienfarbe");
+    h += rangeRow("borderWidth", "Linienstärke", 0, 12, 1, "px");
+    h += rangeRow("pad", "Innenabstand", 2, 60, 1, "px");
+    h += rangeRow("radius", "Ecken abrunden", 0, 200, 1, "px");
+    h += checkRow("Kopfzeile hervorheben", "header");
+    h += selectRow("align", "Ausrichtung", [["left", "Links"], ["center", "Mittig"], ["right", "Rechts"]]);
     return h;
   }
 
@@ -2475,9 +2754,37 @@
       const get = () => pathGet(el, path);
       const set = (v) => {
         pathSet(el, path, v);
+        /* HTML-Widget: Skalierung zoom ↔ Breite/Höhe synchron halten.
+           cw/ch (Inhaltsauflösung) bleiben dabei unverändert. */
+        if (el.type === "html") {
+          const cw = Math.max(1, num(el.cw, el.w) || 1);
+          const ch = Math.max(1, num(el.ch, el.h) || 1);
+          if (path === "zoom") {
+            el.zoom = clamp(num(el.zoom, 1), 0.05, 4);
+            el.w = Math.max(12, Math.round(cw * el.zoom));
+            el.h = Math.max(12, Math.round(ch * el.zoom));
+          } else if (path === "w" || path === "h") {
+            el.zoom = clamp((path === "w" ? el.w / cw : el.h / ch), 0.05, 4);
+            if (path === "w") el.h = Math.max(12, Math.round(ch * el.zoom));
+            else el.w = Math.max(12, Math.round(cw * el.zoom));
+          }
+        }
         if (path === "html") scheduleHtmlRender();
         else render();
         if (path === "name") renderLayers();
+        if (/^(x|y|w|h)($|\.)/.test(path)) growToFit();
+        /* Anzeige-Gegenwerte live aktualisieren (ohne Inspector-Neuaufbau,
+           damit z. B. der Zoom-Schieber während des Ziehens reagiert). */
+        if (el.type === "html") {
+          const zin = inspector.querySelector('[data-bind="zoom"]');
+          const win = inspector.querySelector('[data-bind="w"]');
+          const hin = inspector.querySelector('[data-bind="h"]');
+          if (zin) zin.value = Math.round(clamp(num(el.zoom, 1), 0.05, 4) * 100);
+          if (win) win.value = round1(el.w);
+          if (hin) hin.value = round1(el.h);
+          const valEl = document.getElementById("val-zoom");
+          if (valEl) valEl.textContent = Math.round(clamp(num(el.zoom, 1), 0.05, 4) * 100) + "%";
+        }
       };
       const isColor = kind === "color";
       const isColorText = kind === "colortext";
@@ -2510,7 +2817,7 @@
         return;
       }
       if (isRange) {
-        const isPct = path === "opacity" || path === "fillOpacity" || path === "bgOpacity" || path === "lineHeight";
+        const isPct = path === "opacity" || path === "fillOpacity" || path === "bgOpacity" || path === "lineHeight" || path === "zoom";
         const raw = get();
         inp.value = isPct ? Math.round((raw == null ? 0 : raw) * 100) : raw;
         const valEl = document.getElementById("val-" + path);
@@ -2600,6 +2907,85 @@
       const sync = () => { intervalInp.disabled = !refreshChk.checked; };
       sync();
       refreshChk.addEventListener("change", sync);
+    }
+
+    if (el.type === "table") {
+      const cellsTa = inspector.querySelector("#ae-table-cells");
+      if (cellsTa) {
+        const apply = () => {
+          const rows = clamp(Math.round(num(el.rows, 3)), 1, 40);
+          const cols = clamp(Math.round(num(el.columns, 3)), 1, 20);
+          const lines = String(cellsTa.value).split(/\r?\n/);
+          for (let r = 0; r < rows; r++) {
+            const raw = (lines[r] != null ? lines[r] : "");
+            const parts = raw.indexOf("\t") >= 0 ? raw.split("\t") : raw.split(/[,;]/);
+            for (let c = 0; c < cols; c++) {
+              setTableCell(el, r, c, parts[c] != null ? parts[c] : "");
+            }
+          }
+          render();
+          renderLayers();
+        };
+        cellsTa.addEventListener("input", () => {
+          clearTimeout(tableEditTimer);
+          tableEditTimer = setTimeout(apply, 250);
+        });
+        cellsTa.addEventListener("blur", apply);
+      }
+      inspector.querySelectorAll("[data-table-dims]").forEach((inp) => {
+        inp.addEventListener("change", () => {
+          const rows = inp.dataset.tableDims === "rows"
+            ? clamp(Math.round(Number(inp.value) || 3), 1, 40)
+            : Math.round(num(el.rows, 3));
+          const cols = inp.dataset.tableDims === "cols"
+            ? clamp(Math.round(Number(inp.value) || 3), 1, 20)
+            : Math.round(num(el.columns, 3));
+          resizeTable(el, rows, cols);
+          renderInspector();
+          renderLayers();
+          render();
+        });
+      });
+      inspector.querySelectorAll("[data-table-op]").forEach((b) => {
+        b.addEventListener("click", () => {
+          const op = b.dataset.tableOp;
+          let rows = Math.round(num(el.rows, 3)), cols = Math.round(num(el.columns, 3));
+          if (op === "add-row") rows = Math.min(rows + 1, 40);
+          if (op === "del-row") rows = Math.max(rows - 1, 1);
+          if (op === "add-col") cols = Math.min(cols + 1, 20);
+          if (op === "del-col") cols = Math.max(cols - 1, 1);
+          resizeTable(el, rows, cols);
+          renderInspector();
+          renderLayers();
+          render();
+        });
+      });
+      const tf = inspector.querySelector("#ae-table-file");
+      if (tf) tf.addEventListener("change", () => {
+        const f = tf.files && tf.files[0];
+        if (!f) return;
+        const reader = new FileReader();
+        reader.onload = () => {
+          const text = String(reader.result || "");
+          const lines = text.split(/\r?\n/).filter((l) => l.trim() !== "");
+          const split = (l) => l.indexOf("\t") >= 0 ? l.split("\t") : l.split(/[,;]/);
+          const rows = clamp(lines.length, 1, 40);
+          const cols = clamp(Math.max(1, ...lines.map((l) => split(l).length)), 1, 20);
+          resizeTable(el, rows, cols);
+          const map = tableMap(el);
+          for (let r = 0; r < rows; r++) {
+            const parts = split(lines[r]);
+            for (let c = 0; c < cols; c++) {
+              const row = map[editorLang][r] || (map[editorLang][r] = []);
+              row[c] = parts[c] != null ? String(parts[c]).trim() : "";
+            }
+          }
+          renderInspector();
+          renderLayers();
+          render();
+        };
+        reader.readAsText(f, "utf-8");
+      });
     }
   }
 
@@ -2825,6 +3211,28 @@
     canvas.style.height = (H * view.zoom) + "px";
     if (zoomLabel) zoomLabel.textContent = Math.round(view.zoom * 100) + " %";
     renderWidgetOverlay();
+  }
+
+  /* Auto-Slide: Arbeitsfläche wächst automatisch mit den eingefügten
+     Inhalten (beliebig lange Seite). Breite bleibt fest, Höhe wächst. */
+  function ensureCanvasSize() {
+    canvas.width = W;
+    canvas.height = H;
+  }
+  function growToFit() {
+    let maxB = 0;
+    for (const el of project.elements) {
+      const bb = bboxOf(el);
+      if (bb.bottom > maxB) maxB = bb.bottom;
+    }
+    const need = Math.ceil(maxB) + 160;
+    if (need > H) {
+      H = need;
+      project.height = H;
+      canvas.height = H;
+      applyZoom();
+      render();
+    }
   }
   document.getElementById("ae-zoom-in").addEventListener("click", () => { view.zoom = clamp(view.zoom * 1.15, 0.05, 2); applyZoom(); });
   document.getElementById("ae-zoom-out").addEventListener("click", () => { view.zoom = clamp(view.zoom / 1.15, 0.05, 2); applyZoom(); });
@@ -3116,6 +3524,186 @@
   document.getElementById("ae-modal-backdrop").addEventListener("click", () => modal.classList.add("hidden"));
 
   /* ------------------------------------------------------------------ *
+   *  Auto-Slide: Gesamtdauer
+   *  ------------------------------------------------------------------ */
+  const DURATION_PRESETS = [15, 20, 30, 45, 60, 90, 120];
+  function renderDurationInspector() {
+    const di = document.getElementById("ae-duration-inspector");
+    if (!di) return;
+    if (project.duration == null || !isFinite(project.duration)) project.duration = 30;
+    const d = clamp(Math.round(project.duration), 5, 3600);
+    project.duration = d;
+    di.innerHTML = `
+      <p class="ae-hint">Der Bildschirm scrollt das Auto-Slide automatisch von oben nach unten. Die Gesamtdauer bestimmt dabei die Geschwindigkeit – der Scrollvorgang endet exakt nach dieser Zeit.</p>
+      <div class="ae-duration-presets">${DURATION_PRESETS.map((p) =>
+        `<button type="button" class="ae-dur-btn${d === p ? " active" : ""}" data-dur="${p}">${p}s</button>`
+      ).join("")}</div>
+      <div class="ae-field"><label>Freie Dauer (Sekunden)</label><input type="number" id="ae-duration-free" min="5" max="3600" step="1" value="${d}"></div>`;
+    di.querySelectorAll("[data-dur]").forEach((b) => {
+      b.addEventListener("click", () => { project.duration = Number(b.dataset.dur); renderDurationInspector(); });
+    });
+    const free = document.getElementById("ae-duration-free");
+    if (free) free.addEventListener("change", () => {
+      const v = clamp(Math.round(Number(free.value) || 0), 5, 3600);
+      project.duration = v;
+      free.value = v;
+      renderDurationInspector();
+    });
+  }
+
+  /* ------------------------------------------------------------------ *
+   *  Auto-Slide: Import (PDF / hochformatiges Bild)
+   *  ------------------------------------------------------------------ */
+  const STATIC_PREFIX = window.ANNOUNCEMENT_STATIC || "/static/";
+
+  function pdfStatus(msg, isError) {
+    const el = document.getElementById("ae-pdf-status");
+    if (el) {
+      el.textContent = msg;
+      el.style.color = isError ? "#ff7d8b" : "";
+    }
+  }
+
+  function loadPdfJs() {
+    return new Promise((resolve) => {
+      if (window.pdfjsLib) return resolve(window.pdfjsLib);
+      const s = document.createElement("script");
+      s.src = STATIC_PREFIX + "vendor/pdfjs/pdf.min.js";
+      s.onload = () => resolve(window.pdfjsLib || null);
+      s.onerror = () => resolve(null);
+      document.head.appendChild(s);
+    });
+  }
+
+  function uploadElementFile(file, fallbackName) {
+    const fd = new FormData();
+    fd.append("file", file, fallbackName || "import.png");
+    return fetch("/api/announcements/elements", {
+      method: "POST",
+      headers: { "X-CSRF-Token": csrfToken() },
+      body: fd,
+    })
+      .then((r) => r.json())
+      .then((d) => { if (!d.file) throw new Error(d.error || "Upload fehlgeschlagen."); return d.file; });
+  }
+
+  function importPdf() {
+    const head = modal.querySelector(".ae-modal-head h2");
+    if (head) head.textContent = "PDF importieren";
+    modalBody.innerHTML = `
+      <p class="ae-hint">Wähle ein PDF. Jede Seite wird als Bild übernommen und untereinander zur langen Ansicht zusammengesetzt – die Höhe der Arbeitsfläche wächst automatisch mit.</p>
+      <label class="ae-upload-drop">
+        <input type="file" id="ae-pdf-file" accept=".pdf">
+        <span>PDF auswählen oder hierher ziehen …</span>
+      </label>
+      <div class="ae-hint" id="ae-pdf-status"></div>`;
+    modal.classList.remove("hidden");
+    const f = document.getElementById("ae-pdf-file");
+    if (f) f.addEventListener("change", () => {
+      const file = f.files && f.files[0];
+      if (file) handlePdfFile(file);
+    });
+  }
+
+  async function handlePdfFile(file) {
+    pdfStatus("PDF wird geladen …");
+    try {
+      const lib = await loadPdfJs();
+      if (!lib || !lib.getDocument) {
+        pdfStatus("pdf.js konnte nicht geladen werden – bitte Internetverbindung prüfen.", true);
+        return;
+      }
+      lib.GlobalWorkerOptions = lib.GlobalWorkerOptions || {};
+      lib.GlobalWorkerOptions.workerSrc = STATIC_PREFIX + "vendor/pdfjs/pdf.worker.min.js";
+      const arrbuf = await file.arrayBuffer();
+      const doc = await lib.getDocument({ data: arrbuf }).promise;
+      const num = doc.numPages;
+      const first = await doc.getPage(1);
+      const scale = W / first.getViewport({ scale: 1 }).width;
+      let cursorY = 0;
+      for (let i = 1; i <= num; i++) {
+        pdfStatus("Seite " + i + " von " + num + " wird verarbeitet …");
+        const page = await doc.getPage(i);
+        const vp = page.getViewport({ scale: scale });
+        const cv = document.createElement("canvas");
+        cv.width = Math.round(vp.width);
+        cv.height = Math.round(vp.height);
+        await page.render({ canvasContext: cv.getContext("2d"), viewport: vp }).promise;
+        const blob = await new Promise((res) => cv.toBlob(res, "image/png"));
+        const name = await uploadElementFile(blob, "seite_" + i + ".png");
+        const el = imageEl({ file: name, x: 0, y: Math.round(cursorY), w: W, h: Math.round(vp.height), fit: "cover", radius: 0 });
+        project.elements.push(el);
+        loadImage(name);
+        cursorY += Math.round(vp.height);
+      }
+      modal.classList.add("hidden");
+      H = Math.max(H, Math.round(cursorY) + 120);
+      project.height = H;
+      canvas.height = H;
+      selectedId = null;
+      applyZoom();
+      renderLayers();
+      renderInspector();
+      render();
+      if (window.toast) window.toast(num + " Seiten importiert.", "ok");
+    } catch (err) {
+      pdfStatus("Import fehlgeschlagen: " + (err && err.message ? err.message : err), true);
+    }
+  }
+
+  function importPortraitImage() {
+    const head = modal.querySelector(".ae-modal-head h2");
+    if (head) head.textContent = "Hochformat-Bild importieren";
+    modalBody.innerHTML = `
+      <p class="ae-hint">Wähle ein hochformatiges Bild (PNG, JPG, JPEG, WebP). Es wird in voller Breite oben auf der Arbeitsfläche platziert – die Höhe wächst automatisch; darunter kannst du weitere Elemente einfügen.</p>
+      <label class="ae-upload-drop">
+        <input type="file" id="ae-portrait-file" accept=".png,.jpg,.jpeg,.webp">
+        <span>Bild auswählen oder hierher ziehen …</span>
+      </label>
+      <div class="ae-hint" id="ae-portrait-status"></div>`;
+    modal.classList.remove("hidden");
+    const f = document.getElementById("ae-portrait-file");
+    if (f) f.addEventListener("change", () => {
+      const file = f.files && f.files[0];
+      if (file) handlePortraitImage(file);
+    });
+  }
+
+  function handlePortraitImage(file) {
+    const st = document.getElementById("ae-portrait-status");
+    if (st) st.textContent = "Bild wird hochgeladen …";
+    uploadElementFile(file, "import.png")
+      .then((name) => {
+        loadImage(name, () => {
+          const img = elementImage(name);
+          if (!img || !img.width) {
+            if (window.toast) window.toast("Bild konnte nicht geladen werden.", "error");
+            return;
+          }
+          const h = Math.max(120, Math.round(W * img.height / img.width));
+          const el = imageEl({ file: name, x: 0, y: 0, w: W, h: h, fit: "cover", radius: 0 });
+          project.elements.push(el);
+          selectedId = el.id;
+          modal.classList.add("hidden");
+          H = Math.max(H, h + 120);
+          project.height = H;
+          canvas.height = H;
+          renderLayers();
+          renderInspector();
+          applyZoom();
+          render();
+          if (window.toast) window.toast("Bild importiert.", "ok");
+        });
+      })
+      .catch((err) => { if (st) st.textContent = "Import fehlgeschlagen: " + err.message; if (window.toast) window.toast(err.message, "error"); });
+  }
+
+  const importPdfBtn = document.getElementById("ae-import-pdf");
+  if (importPdfBtn) importPdfBtn.addEventListener("click", importPdf);
+  const importImageBtn = document.getElementById("ae-import-image");
+  if (importImageBtn) importImageBtn.addEventListener("click", importPortraitImage);
+
+  /* ------------------------------------------------------------------ *
    *  Speichern
    * ------------------------------------------------------------------ */
   const saveBtn = document.getElementById("ann-save-btn");
@@ -3154,7 +3742,7 @@
     saveStatus.textContent = "Wird gespeichert …";
     saveBtn.disabled = true;
     try {
-      project.name = (nameInput && nameInput.value.trim()) || project.name || "Ankündigungsbild";
+      project.name = (nameInput && nameInput.value.trim()) || project.name || (window.ANNOUNCEMENT_MEDIA_TYPE === "auto_slide" ? "Auto-Slide" : "Ankündigungsbild");
       if (bgImage && bgFile) {
         // Neues Hintergrundbild wird im FormData mitgeschickt und vom
         // Server gespeichert; die Vorschau nutzt derweil das lokale Bild.
@@ -3187,6 +3775,7 @@
 
       fd.append("project", JSON.stringify(project));
       fd.append("name", project.name);
+      fd.append("media_type", window.ANNOUNCEMENT_MEDIA_TYPE === "auto_slide" ? "auto_slide" : "image");
       if (bgFile) fd.append("background", bgFile);
 
       const res = await fetch(mediaId ? `/api/announcements/${mediaId}` : "/api/announcements", {
@@ -3197,7 +3786,7 @@
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || "Speichern fehlgeschlagen.");
       saveStatus.textContent = "Gespeichert.";
-      if (window.toast) window.toast("Ankündigungsbild gespeichert.", "ok");
+      if (window.toast) window.toast("Gespeichert.", "ok");
       setTimeout(() => { window.location.href = "/admin/media"; }, 700);
     } catch (err) {
       saveStatus.textContent = err.message;
@@ -3219,6 +3808,7 @@
 
   function init() {
     project = migrateProject(project);
+    ensureCanvasSize();
     applyZoom();
     renderLayers();
     renderInspector();
@@ -3226,6 +3816,7 @@
     bindBg();
     renderClockInspector();
     renderWeatherInspector();
+    renderDurationInspector();
     preloadProjectImages();
     render();
     if (isNew) {

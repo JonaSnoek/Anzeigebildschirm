@@ -24,6 +24,7 @@ def _ensure_directories() -> None:
         BASE_DIR / "uploads" / "images",
         BASE_DIR / "uploads" / "videos",
         BASE_DIR / "uploads" / "audio",
+        BASE_DIR / "uploads" / "auto_slides",
         BASE_DIR / "uploads" / "announcements",
     )
     for folder in folders:

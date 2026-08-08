@@ -11,11 +11,12 @@ Alle verbundenen Anzeigen leiten daraus denselben aktuellen Inhalt ab –
 unabhängig davon, wann sie geöffnet wurden. Der Server gibt die Reihenfolge
 und die Anzeigedauer zentral vor.
 
-Element-Typen: "image", "video", "clock" (Uhr-Ansicht zwischen den Medien,
-sofern clock_interval aktiv ist) und "weather" (eigene große Wetter-Ansicht,
-sofern weather_interval aktiv ist). Beide Intervalle sind getrennt
-konfigurierbar (1 = nach jeder Folie, N = alle N Folien, off = aus).
-Jedes Ankündigungsbild trägt außerdem
+Element-Typen: "image", "video", "auto_slide" (hochformatige Folie, die mit
+konstanter Geschwindigkeit über ihre Gesamtdauer scrollt), "clock" (Uhr-Ansicht
+zwischen den Medien, sofern clock_interval aktiv ist) und "weather" (eigene
+große Wetter-Ansicht, sofern weather_interval aktiv ist). Beide Intervalle sind
+getrennt konfigurierbar (1 = nach jeder Folie, N = alle N Folien, off = aus).
+Jedes Editor-Medium trägt außerdem
 seine eigene Uhr-Konfiguration (Sichtbarkeit, Farbe, Schatten) im Slot.
 """
 
@@ -33,6 +34,9 @@ from ..services.settings import get_all_settings, interval_step
 # Sobald ein Anzeige-Client die tatsächliche Länge meldet (/api/display/report),
 # wird die Timeline automatisch neu berechnet und allen Geräten übertragen.
 DEFAULT_VIDEO_DURATION = 15.0
+
+# Alle Medientypen, die in der Wiedergabe-Playlist laufen.
+PLAYLIST_TYPES = ("image", "video", "auto_slide")
 
 # Cache für die Zyklus-Referenz (cycle_start) – wird nur neu gesetzt, wenn
 # sich die Signatur (Playlist/Einstellungen) ändert.
@@ -74,17 +78,19 @@ def _html_widgets(project: dict) -> dict | None:
 
 def _announcement_configs(items) -> dict:
     """
-    Liefert je Ankündigungsbild dessen Einstellungen aus der Projektdatei:
+    Liefert je Editor-Medium (Ankündigungsbild/Auto-Slide) dessen
+    Einstellungen aus der Projektdatei:
 
     - `clock`:  Uhr-Steuerung der Folie (Sichtbarkeit, Farbe, Schatten).
     - `weather`: Wetter-Konfiguration (nur wenn aktiviert UND Standort gesetzt).
+    - `width`/`height`: Projekt-Abmessungen (bei Auto-Slides fürs Scrollen).
 
     Die Überschrift ist mehrsprachig: entweder ein String (legacy) oder ein
     {Sprache: Text}-Dict. Das Display wählt die passende Sprache selbst.
     """
     out: dict = {}
     for m in items:
-        if m.type != "image" or not m.project_file:
+        if not m.project_file:
             continue
         project = load_project(m) or {}
         clock = project.get("clock") or {}
@@ -102,6 +108,9 @@ def _announcement_configs(items) -> dict:
                 "shadow": clock.get("shadow") is not False,
             },
         }
+        if m.type == "auto_slide":
+            entry["width"] = int(project.get("width") or 1080)
+            entry["height"] = int(project.get("height") or 1080)
         widgets = _html_widgets(project)
         if widgets:
             entry["widgets"] = widgets
@@ -117,19 +126,23 @@ def _announcement_configs(items) -> dict:
 
 
 def _playlist():
-    """Aktive Bilder und Videos in zentraler Sortierreihenfolge."""
+    """Aktive Bilder, Videos und Auto-Slides in zentraler Sortierreihenfolge."""
     rows = db.session.execute(
         select(Media)
         .where(Media.active.is_(True))
         .order_by(Media.sort_order.asc(), Media.id.asc())
     ).scalars().all()
-    return [m for m in rows if m.type in ("image", "video")]
+    return [m for m in rows if m.type in PLAYLIST_TYPES]
 
 
 def _item_duration(item: Media, slide_duration: int) -> float:
     """Zentrale Anzeigedauer eines Mediums (Sekunden)."""
     if item.type == "video":
         return float(item.duration) if item.duration else DEFAULT_VIDEO_DURATION
+    if item.type == "auto_slide":
+        # Gesamtdauer aus dem Projekt wird beim Speichern auf media.duration
+        # gespiegelt (siehe routes/announcements.py).
+        return float(item.duration) if item.duration else float(slide_duration)
     return float(slide_duration)
 
 
@@ -176,7 +189,7 @@ def _timeline_slots(items, settings: dict, aw_configs: dict = None):
     media_count = 0
     for item in items:
         config = aw_configs.get(item.id)
-        slots.append({
+        slot = {
             "type": item.type,
             "id": item.id,
             "name": item.name,
@@ -188,7 +201,14 @@ def _timeline_slots(items, settings: dict, aw_configs: dict = None):
             "duration": _item_duration(item, slide),
             "clock": config.get("clock") if config else None,
             "widgets": config.get("widgets") if config else None,
-        })
+        }
+        # Auto-Slides scrollen vertikal: das Display braucht die
+        # Projekt-Abmessungen, um die konstante Scrollgeschwindigkeit zu
+        # berechnen (Ende exakt nach der Gesamtdauer).
+        if item.type == "auto_slide" and config:
+            slot["width"] = config.get("width")
+            slot["height"] = config.get("height")
+        slots.append(slot)
         # Direkt nach dem Ankündigungsbild dessen eigene Wetterseite einfügen.
         aw = announcement_weather_slot(item)
         if aw:
@@ -226,7 +246,7 @@ def _signature(items, settings: dict, aw_configs: dict = None) -> str:
         f"{m.id}:{m.duration or 0}:{m.sort_order}:{m.active}" for m in items
     )
     announce = ",".join(
-        f"{m_id}:{cfg.get('weather', {}).get('enabled')}:{cfg.get('weather', {}).get('location')}:{cfg.get('weather', {}).get('heading')}:{cfg.get('widgets')}"
+        f"{m_id}:{cfg.get('weather', {}).get('enabled')}:{cfg.get('weather', {}).get('location')}:{cfg.get('weather', {}).get('heading')}:{cfg.get('widgets')}:{cfg.get('width')}:{cfg.get('height')}"
         for m_id, cfg in aw_configs.items()
     )
     return "|".join([
@@ -298,7 +318,7 @@ def refresh_announcement_weather() -> None:
         .where(Media.active.is_(True))
         .order_by(Media.sort_order.asc(), Media.id.asc())
     ).scalars().all()
-    items = [m for m in rows if m.type in ("image", "video")]
+    items = [m for m in rows if m.type in PLAYLIST_TYPES]
     configs = _announcement_configs(items)
     for m in items:
         config = configs.get(m.id)
@@ -322,7 +342,7 @@ def build_state() -> dict:
         .order_by(Media.sort_order.asc(), Media.id.asc())
     ).scalars().all()
 
-    items = [m for m in rows if m.type in ("image", "video")]
+    items = [m for m in rows if m.type in PLAYLIST_TYPES]
     audio = [m.to_dict() for m in rows if m.type == "audio"]
 
     return {
