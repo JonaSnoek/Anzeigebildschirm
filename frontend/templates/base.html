@@ -83,7 +83,7 @@
   </div>
 
   <script>
-    window.__PERMS = JSON.parse('{{ permissions }}') || [];
+    window.__PERMS = JSON.parse('{{ permissions|safe }}') || [];
   </script>
   <script src="{{ url_for('static', filename='js/widgets.js') }}"></script>
   <script src="{{ url_for('static', filename='js/admin.js') }}"></script>

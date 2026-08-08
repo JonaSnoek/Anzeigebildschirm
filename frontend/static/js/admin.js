@@ -415,11 +415,17 @@ if (settingsForm) {
   const canSetEdit = can("settings.edit");
   const canSetWidgets = can("settings.widgets");
   const canSetWeather = can("settings.weather");
+  /* Sperrt die Bedienelemente eines Abschnitts ohne Berechtigung – statt des
+     gesamten Fieldsets, damit verschachtelte Abschnitte (z. B. "Ort" unter
+     "settings.weather") mit eigenem Recht aktiv bleiben können. */
   document.querySelectorAll("fieldset[data-perm]").forEach((fs) => {
-    if (!can(fs.dataset.perm)) {
-      fs.disabled = true;
-      fs.classList.add("locked");
-    }
+    if (can(fs.dataset.perm)) return;
+    fs.classList.add("locked");
+    fs.querySelectorAll("input, select, textarea, button").forEach((el) => {
+      const nested = el.closest("fieldset[data-perm]");
+      if (nested && nested !== fs && can(nested.dataset.perm)) return;
+      el.disabled = true;
+    });
   });
 
   const volumeRange = settingsForm.volume;
