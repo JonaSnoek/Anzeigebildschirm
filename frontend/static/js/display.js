@@ -64,6 +64,19 @@
   let syncInFlight = false;     // verhindert überlappende Revalidierungen
   let source = null;
 
+  // Fallback-Polling für den leeren Zustand: Solange keine aktiven Medien
+  // (bzw. keine abzuspielenden Inhalte) vorhanden sind und nur z. B. die Uhr
+  // läuft, wird keine Medienrunde abgeschlossen – die normale Revalidierung
+  // nach jedem Zyklus greift also nicht. Damit ein neu aktiviertes Medium
+  // trotzdem spätestens nach 10 Sekunden erscheint, fragt der Client in
+  // diesem Zustand zusätzlich alle EMPTY_POLL_MS Millisekunden den aktuellen
+  // Zustand ab. Die Echtzeitverbindung (SSE) bleibt davon unberührt und
+  // übernimmt Änderungen weiterhin sofort; das Polling ist die Absicherung,
+  // wenn keine Wiedergabe läuft oder die Verbindung nicht verfügbar ist.
+  const EMPTY_POLL_MS = 10000;
+  let emptyPollTimer = null;
+  let lastStateSig = "";        // Signatur des zuletzt übernommenen Zustands
+
   const nowSec = () => Date.now() / 1000 + skew;
 
   const num = (v, d) => (typeof v === "number" && isFinite(v) ? v : d);
@@ -650,6 +663,8 @@
     const prevTimeline = state.timeline;
     state.timeline = data.timeline || null;
     state.announcement_weather = data.announcement_weather || {};
+    lastStateSig = signatureOf(data);
+    ensureEmptyPoll();
     // Bei geändertem Zyklus das Prüffenster der Revalidierung zurücksetzen,
     // damit der neue Zyklus wieder am Ende geprüft wird.
     if (
@@ -669,6 +684,7 @@
   function tick() {
     showSlot(currentSlot());
     revalidate(false);
+    ensureEmptyPoll();
   }
 
   /* ---------- Zuverlässige Synchronisation ----------
@@ -698,6 +714,55 @@
       })
       .catch(() => { /* nächster Zyklus versucht es erneut */ })
       .finally(() => { syncInFlight = false; });
+  }
+
+  /* ---------- Fallback-Polling bei leerer Wiedergabeliste ----------
+     Fingerabdruck des übernommenen Zustands: deckt alle relevanten
+     Änderungen ab (Medium aktiviert/erstellt/wieder aktiviert/ersetzt,
+     Reihenfolge geändert, neue Timeline). Medien-Austausch ändert die
+     URL (neue Dateiversion), Reihenfolge-/Aktivitätsänderungen ändern
+     Start/Ende bzw. die Medienliste. */
+  function signatureOf(data) {
+    const tl = data.timeline;
+    const items = tl && tl.items ? tl.items : [];
+    return JSON.stringify({
+      start: tl ? tl.cycle_start : null,
+      dur: tl ? tl.cycle_duration : null,
+      sig: tl ? tl.signature : null,
+      items: items.map((it) => [it.type, it.id, it.start, it.end, it.url, it.duration]),
+      media: (data.media || []).map((m) => [m.id, m.active !== false, m.sort_order]),
+    });
+  }
+
+  function hasPlayableContent() {
+    return !!(state.timeline && state.timeline.items && state.timeline.items.length > 0);
+  }
+
+  /* Hält das 10-Sekunden-Polling nur im leeren Zustand aktiv und stoppt es,
+     sobald wieder abspielbare Inhalte vorhanden sind (dann greift wieder die
+     Revalidierung nach jedem Zyklus). */
+  function ensureEmptyPoll() {
+    if (hasPlayableContent()) {
+      if (emptyPollTimer !== null) {
+        clearInterval(emptyPollTimer);
+        emptyPollTimer = null;
+      }
+      return;
+    }
+    if (emptyPollTimer !== null) return;
+    emptyPollTimer = setInterval(emptyPollCheck, EMPTY_POLL_MS);
+  }
+
+  /* Einmalige Abfrage im leeren Zustand: Wurde eine Änderung erkannt, wird
+     der Zustand sofort übernommen und die normale Wiedergabe startet. */
+  function emptyPollCheck() {
+    if (hasPlayableContent()) return; // Zustand hat sich bereits geändert
+    fetch("/api/display", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((data) => {
+        if (signatureOf(data) !== lastStateSig) applyState(data, data.server_time);
+      })
+      .catch(() => { /* nächste Prüfung versucht es erneut */ });
   }
 
   /* ---------- Echtzeit (SSE) ---------- */
