@@ -7,6 +7,7 @@
   <h1>Benutzerverwaltung</h1>
 
   <div class="users-layout">
+    {% if can("users.create") %}
     <div class="card">
       <h2>Neuer Benutzer</h2>
       <form id="user-create-form">
@@ -25,11 +26,13 @@
             <option value="editor">Editor – Medien verwalten</option>
             <option value="admin">Administrator – voller Zugriff</option>
           </select>
+          <div class="hint">Die Rolle ist die Vorlage; einzelne Rechte lassen sich pro Benutzer in den „Berechtigungen“ anpassen.</div>
         </div>
         <button type="submit" class="btn btn-primary">Benutzer anlegen</button>
         <span id="user-create-status" class="status"></span>
       </form>
     </div>
+    {% endif %}
 
     <div class="card">
       <h2>Vorhandene Benutzer</h2>
@@ -44,4 +47,24 @@
     </div>
   </div>
 </div>
+
+<div id="perms-modal" class="modal-overlay hidden">
+  <div class="modal perms-modal">
+    <button class="modal-close" title="Schließen">&times;</button>
+    <h2>Berechtigungen · <span id="perms-user-name"></span></h2>
+    <p class="hint" id="perms-note"></p>
+    <p class="hint">Rolle als Vorlage: <strong id="perms-user-role"></strong></p>
+    <div id="perms-list"></div>
+    <div class="row-btns">
+      <button class="btn btn-primary" id="perms-save">Speichern</button>
+      <span id="perms-status" class="status"></span>
+    </div>
+  </div>
+</div>
+
+<script>
+  window.__PERM_CATALOG = {{ catalog_json|safe }};
+  window.__ROLE_TEMPLATES = {{ role_templates_json|safe }};
+  window.__CURRENT_USER_ID = {{ current_user.id }};
+</script>
 {% endblock %}

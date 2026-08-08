@@ -7,6 +7,7 @@ Nachrichten) lassen sich als weitere Blueprints unter backend/routes/
 ergänzen.
 """
 
+import json
 import sys
 
 from flask import Flask, render_template, request
@@ -14,6 +15,7 @@ from flask import Flask, render_template, request
 from .config import BASE_DIR, Config
 from .database import db
 from .models import Setting
+from .permissions import resolve_permissions
 from .security import get_csrf_token, get_current_user, validate_csrf
 
 
@@ -122,6 +124,17 @@ def _migrate_schema() -> None:
             db.session.delete(old)
     db.session.commit()
 
+    # Individuelle Benutzer-Berechtigungen (JSON-Textspalte auf users).
+    try:
+        user_columns = {c["name"] for c in inspector.get_columns("users")}
+    except Exception:
+        user_columns = set()
+    if "permissions" not in user_columns:
+        db.session.execute(
+            db.text("ALTER TABLE users ADD COLUMN permissions TEXT NOT NULL DEFAULT ''")
+        )
+        db.session.commit()
+
 
 def create_app(config_class=Config) -> Flask:
     """
@@ -176,10 +189,20 @@ def create_app(config_class=Config) -> Flask:
     @app.context_processor
     def _inject_globals() -> dict:
         """Stellt Variablen für alle Templates bereit."""
+        user = get_current_user()
         return {
-            "current_user": get_current_user(),
+            "current_user": user,
             "csrf_token": get_csrf_token,
             "site_name": "Digital Signage",
+            # ``can("recht.key")`` prüft ein einzelnes Recht im Template.
+            "can": lambda perm: user is not None and (
+                user.role == "admin" or perm in resolve_permissions(user)
+            ),
+            # Alle effektiven Rechte als JSON-Liste für das Frontend.
+            "permissions": json.dumps(
+                sorted(resolve_permissions(user)) if user else [],
+                ensure_ascii=False,
+            ),
         }
 
     # ---- Fehlerbehandler ---------------------------------------------------

@@ -22,7 +22,8 @@ from ..config import BASE_DIR, Config
 from ..database import db
 from ..events import notify_display
 from ..models import AnnouncementTemplate, Media
-from ..security import roles_required
+from ..permissions import has_permission
+from ..security import get_current_user, permission_required, roles_required
 from ..services.announcements import (
     copy_media_to_element,
     delete_background,
@@ -202,15 +203,25 @@ def _render_editor(project: dict, media_id: int | None, name: str, media_type: s
     )
 
 
+def _require_editor_permission(media: Media, action: str) -> None:
+    """Erfordert ein Editor-Kategorie-Recht (Ankündigungsbild/Auto-Slide)."""
+    user = get_current_user()
+    if user is None:
+        abort(401)
+    perm = "auto_slides." + action if media.type == "auto_slide" else "announcements." + action
+    if not has_permission(user, perm):
+        abort(403)
+
+
 @bp.get("/admin/announcements/new")
-@roles_required("admin", "editor")
+@permission_required("announcements.create")
 def editor_new():
     """Öffnet den Editor für ein neues Ankündigungsbild."""
     return _render_editor(_default_project("image"), None, "", "image")
 
 
 @bp.get("/admin/announcements/<int:media_id>/edit")
-@roles_required("admin", "editor")
+@permission_required("announcements.edit")
 def editor_edit(media_id):
     """Öffnet den Editor für ein vorhandenes Ankündigungsbild."""
     media = db.session.get(Media, media_id)
@@ -221,14 +232,14 @@ def editor_edit(media_id):
 
 
 @bp.get("/admin/auto-slides/new")
-@roles_required("admin", "editor")
+@permission_required("auto_slides.create")
 def auto_slide_new():
     """Öffnet den Editor für ein neues Auto-Slide (hochformatige Folie)."""
     return _render_editor(_default_project("auto_slide"), None, "", "auto_slide")
 
 
 @bp.get("/admin/auto-slides/<int:media_id>/edit")
-@roles_required("admin", "editor")
+@permission_required("auto_slides.edit")
 def auto_slide_edit(media_id):
     """Öffnet den Editor für ein vorhandenes Auto-Slide."""
     media = db.session.get(Media, media_id)
@@ -239,7 +250,7 @@ def auto_slide_edit(media_id):
 
 
 @bp.get("/api/announcements/bg/<path:filename>")
-@roles_required("admin", "editor")
+@permission_required("announcements.view", "auto_slides.view")
 def background_file(filename):
     """Liefert ein Hintergrund-/Element-Bild des Editors an den Admin-Bereich."""
     folder = Config.ANNOUNCEMENT_DIR
@@ -252,7 +263,10 @@ def background_file(filename):
 
 
 @bp.post("/api/announcements/elements")
-@roles_required("admin", "editor")
+@permission_required(
+    "announcements.create", "announcements.edit",
+    "auto_slides.create", "auto_slides.edit",
+)
 def upload_element_image():
     """Lädt ein Bild hoch, das als Element im Editor eingefügt wird."""
     file = request.files.get("file")
@@ -263,7 +277,10 @@ def upload_element_image():
 
 
 @bp.post("/api/announcements/from-media/<int:media_id>")
-@roles_required("admin", "editor")
+@permission_required(
+    "announcements.create", "announcements.edit",
+    "auto_slides.create", "auto_slides.edit",
+)
 def element_from_media(media_id):
     """Übernimmt ein Bild aus der Medienbibliothek als Editor-Element."""
     media = db.session.get(Media, media_id)
@@ -278,7 +295,7 @@ def element_from_media(media_id):
 # ---------------------------------------------------------------------------
 
 @bp.get("/api/announcement-templates")
-@roles_required("admin", "editor")
+@permission_required("announcements.view", "auto_slides.view")
 def list_templates():
     """Alle gespeicherten Design-Vorlagen des Administrators."""
     rows = db.session.execute(
@@ -288,7 +305,10 @@ def list_templates():
 
 
 @bp.post("/api/announcement-templates")
-@roles_required("admin", "editor")
+@permission_required(
+    "announcements.create", "announcements.edit",
+    "auto_slides.create", "auto_slides.edit",
+)
 def create_template():
     """Speichert das aktuelle Design als benannte Vorlage."""
     data = request.get_json(silent=True) or {}
@@ -320,7 +340,7 @@ def delete_template(template_id):
 
 
 @bp.get("/api/announcement-templates/<int:template_id>")
-@roles_required("admin", "editor")
+@permission_required("announcements.view", "auto_slides.view")
 def get_template(template_id):
     """Liefert das Projekt-JSON einer Design-Vorlage."""
     template = db.session.get(AnnouncementTemplate, template_id)
@@ -430,7 +450,6 @@ def _media_type(request, project: dict) -> str:
 
 
 @bp.post("/api/announcements")
-@roles_required("admin", "editor")
 def create():
     """Erstellt ein neues Editor-Medium (multipart: file [+ file_<lang>] + project [+ background]).
 
@@ -443,6 +462,13 @@ def create():
         return jsonify({"error": error}), 400
 
     media_type = _media_type(request, project)
+    user = get_current_user()
+    if user is None:
+        abort(401)
+    perm = "auto_slides.create" if media_type == "auto_slide" else "announcements.create"
+    if not has_permission(user, perm):
+        abort(403)
+
     default_name = "Auto-Slide" if media_type == "auto_slide" else "Ankündigungsbild"
     name = (request.form.get("name") or "").strip() or (project.get("name") or "").strip() or default_name
     stored_name, error = _store_png(request.files.get("file"), media_type)
@@ -495,12 +521,12 @@ def create():
 
 
 @bp.post("/api/announcements/<int:media_id>")
-@roles_required("admin", "editor")
 def update(media_id):
     """Speichert ein vorhandenes Editor-Medium erneut (multipart)."""
     media = db.session.get(Media, media_id)
     if media is None or media.type not in ("image", "auto_slide") or not media.project_file:
         return jsonify({"error": "Medienprojekt nicht gefunden."}), 404
+    _require_editor_permission(media, "edit")
     media_type = media.type
 
     project, error = _parse_project(request.form.get("project"))
@@ -580,12 +606,12 @@ def update(media_id):
 
 
 @bp.get("/api/announcements/<int:media_id>")
-@roles_required("admin", "editor")
 def get_project(media_id):
     """Liefert die Projektdatei eines Editor-Mediums (Ankündigungsbild/Auto-Slide)."""
     media = db.session.get(Media, media_id)
     if media is None or media.type not in ("image", "auto_slide") or not media.project_file:
         return jsonify({"error": "Medienprojekt nicht gefunden."}), 404
+    _require_editor_permission(media, "view")
     project = load_project(media)
     if project is None:
         return jsonify({"error": "Projektdatei fehlt."}), 404

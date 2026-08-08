@@ -67,7 +67,9 @@
       </div>
       <div class="row-btns">
         <a href="{{ url_for('public.display') }}" target="_blank" rel="noopener" class="btn">Vollbild öffnen ↗</a>
+        {% if can("settings.view") %}
         <a href="{{ url_for('settings.page') }}" class="btn">Anzeige konfigurieren</a>
+        {% endif %}
       </div>
     </div>
 

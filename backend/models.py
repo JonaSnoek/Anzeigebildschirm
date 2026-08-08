@@ -14,6 +14,7 @@ import bcrypt
 from sqlalchemy import Boolean, DateTime, Float, Integer, String, Text
 
 from .database import db
+from .permissions import ALL_PERMISSIONS
 
 
 def _utcnow() -> datetime:
@@ -34,6 +35,9 @@ class User(db.Model):
     role = db.Column(String(16), nullable=False, default="viewer")
     active = db.Column(Boolean, nullable=False, default=True)
     created_at = db.Column(DateTime, nullable=False, default=_utcnow)
+    # Individuelle Berechtigungen: JSON-Dict {"rechts.key": true|false} mit
+    # Overrides zur Rollen-Vorlage. Leer = Rollen-Vorlage gilt unverändert.
+    permissions = db.Column(Text, nullable=False, default="")
 
     def set_password(self, password: str) -> None:
         """Hasht das Passwort mit bcrypt – niemals im Klartext speichern."""
@@ -50,6 +54,24 @@ class User(db.Model):
         except ValueError:
             return False
 
+    def permissions_dict(self) -> dict:
+        """Individuelle Rechte-Overrides als Dict {Schlüssel: bool}."""
+        if not self.permissions:
+            return {}
+        try:
+            value = json.loads(self.permissions)
+            return value if isinstance(value, dict) else {}
+        except (TypeError, ValueError):
+            return {}
+
+    def set_permissions(self, overrides: dict) -> None:
+        """Speichert Rechte-Overrides (nur gültige Schlüssel, boolesche Werte)."""
+        cleaned = {}
+        for key, granted in (overrides or {}).items():
+            if key in ALL_PERMISSIONS:
+                cleaned[key] = bool(granted)
+        self.permissions = json.dumps(cleaned, ensure_ascii=False)
+
     def to_dict(self) -> dict:
         """Serielles Format für die API (ohne Passwort-Hash)."""
         return {
@@ -57,6 +79,7 @@ class User(db.Model):
             "username": self.username,
             "role": self.role,
             "active": self.active,
+            "permissions": self.permissions_dict(),
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }
 

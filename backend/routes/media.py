@@ -3,18 +3,42 @@ Medienverwaltung: Upload, Auflisten, Löschen, Umbenennen, Ersetzen,
 Sortieren und Vorschau. Zugriff nur für Administratoren und Editoren.
 """
 
-from flask import Blueprint, jsonify, render_template, request
+from flask import Blueprint, abort, jsonify, render_template, request
 from sqlalchemy import func, select
 
 from ..config import Config
 from ..database import db
 from ..events import notify_display
 from ..models import Media
-from ..security import roles_required
+from ..permissions import has_any_permission, has_permission
+from ..security import get_current_user, permission_required
 from ..services.announcements import delete_project, duplicate_announcement
 from ..services.media import delete_media_file, handle_upload, replace_file
 
 bp = Blueprint("media", __name__)
+
+
+def _category(media: Media) -> str:
+    """Rechte-Kategorie eines Medienobjekts.
+
+    - auto_slide      → ``auto_slides``
+    - Ankündigungsbild (image mit Projektdatei) → ``announcements``
+    - alle übrigen (Bilder, Videos, Audio)      → ``media``
+    """
+    if media.type == "auto_slide":
+        return "auto_slides"
+    if media.type == "image" and media.project_file:
+        return "announcements"
+    return "media"
+
+
+def _require_action(action: str, media: Media) -> None:
+    """Erfordert ein Kategorie-Recht für eine Aktion an einem Medienobjekt."""
+    user = get_current_user()
+    if user is None:
+        abort(401)
+    if not has_permission(user, f"{_category(media)}.{action}"):
+        abort(403)
 
 
 def _counts() -> dict:
@@ -26,7 +50,7 @@ def _counts() -> dict:
 
 
 @bp.get("/admin/media")
-@roles_required("admin", "editor")
+@permission_required("media.view", "announcements.view", "auto_slides.view")
 def page():
     """Verwaltungsseite für Medien."""
     return render_template(
@@ -37,12 +61,21 @@ def page():
 
 
 @bp.get("/api/media")
-@roles_required("admin", "editor")
+@permission_required("media.view", "announcements.view", "auto_slides.view")
 def list_media():
     """Liefert die Medien eines Typs in Sortierreihenfolge."""
     media_type = request.args.get("type", "image")
     if media_type not in Config.UPLOAD_TYPES:
         return jsonify({"error": "Ungültiger Medientyp."}), 400
+
+    # Pro Tab nur die passende Ansehen-Rechte abfragen (Bilder teilen sich
+    # den Tab mit den Ankündigungsbildern).
+    user = get_current_user()
+    per_type = {"video": "media.view", "audio": "media.view", "auto_slide": "auto_slides.view"}
+    if media_type in per_type and not has_permission(user, per_type[media_type]):
+        abort(403)
+    if media_type == "image" and not has_any_permission(user, "media.view", "announcements.view"):
+        abort(403)
 
     rows = db.session.execute(
         select(Media)
@@ -54,7 +87,7 @@ def list_media():
 
 
 @bp.post("/api/media/upload")
-@roles_required("admin", "editor")
+@permission_required("media.create")
 def upload():
     """Nimmt einen Datei-Upload entgegen (multipart/form-data, Feld 'file')."""
     file = request.files.get("file")
@@ -66,12 +99,12 @@ def upload():
 
 
 @bp.post("/api/media/<int:media_id>/delete")
-@roles_required("admin", "editor")
 def delete(media_id):
     """Löscht eine Mediendatei (Datenbankeintrag + Datei)."""
     media = db.session.get(Media, media_id)
     if media is None:
         return jsonify({"error": "Datei nicht gefunden."}), 404
+    _require_action("delete", media)
     delete_media_file(media)
     delete_project(media)  # Ankündigungsbilder: Projektdatei + Hintergrund entfernen
     db.session.delete(media)
@@ -81,12 +114,12 @@ def delete(media_id):
 
 
 @bp.post("/api/media/<int:media_id>/rename")
-@roles_required("admin", "editor")
 def rename(media_id):
     """Benennt ein Medium um (nur Anzeigename, Datei bleibt unverändert)."""
     media = db.session.get(Media, media_id)
     if media is None:
         return jsonify({"error": "Datei nicht gefunden."}), 404
+    _require_action("edit", media)
 
     data = request.get_json(silent=True) or {}
     name = (data.get("name") or "").strip()
@@ -99,7 +132,6 @@ def rename(media_id):
 
 
 @bp.post("/api/media/<int:media_id>/active")
-@roles_required("admin", "editor")
 def set_active(media_id):
     """
     Schaltet ein Medium ein oder aus.
@@ -111,6 +143,7 @@ def set_active(media_id):
     media = db.session.get(Media, media_id)
     if media is None:
         return jsonify({"error": "Datei nicht gefunden."}), 404
+    _require_action("toggle", media)
 
     data = request.get_json(silent=True) or {}
     if "active" in data:
@@ -123,12 +156,12 @@ def set_active(media_id):
 
 
 @bp.post("/api/media/<int:media_id>/replace")
-@roles_required("admin", "editor")
 def replace(media_id):
     """Ersetzt die Datei eines Mediums durch einen neuen Upload."""
     media = db.session.get(Media, media_id)
     if media is None:
         return jsonify({"error": "Datei nicht gefunden."}), 404
+    _require_action("replace", media)
 
     file = request.files.get("file")
     new_media, error = replace_file(media, file)
@@ -139,7 +172,6 @@ def replace(media_id):
 
 
 @bp.post("/api/media/<int:media_id>/duplicate")
-@roles_required("admin", "editor")
 def duplicate(media_id):
     """
     Dupliziert ein Medium (Datei + Datenbankzeile). Bei Ankündigungsbildern
@@ -149,6 +181,7 @@ def duplicate(media_id):
     media = db.session.get(Media, media_id)
     if media is None:
         return jsonify({"error": "Datei nicht gefunden."}), 404
+    _require_action("copy", media)
 
     if media.project_file:
         copy = duplicate_announcement(media)
@@ -180,11 +213,31 @@ def duplicate(media_id):
 
 
 @bp.post("/api/media/reorder")
-@roles_required("admin", "editor")
 def reorder():
-    """Übernimmt eine neue Sortierreihenfolge (JSON: {"ids": [..]})."""
+    """Übernimmt eine neue Sortierreihenfolge (JSON: {"type": ..., "ids": [..]}).
+
+    Das Recht „Verschieben/Reihenfolge“ wird je Tab abgeprüft: Bilder werden
+    sowohl über ``media.move`` als auch ``announcements.move`` gestattet
+    (Ankündigungsbilder liegen im gleichen Tab), Videos/Audio über
+    ``media.move`` und Auto-Slides über ``auto_slides.move``.
+    """
     data = request.get_json(silent=True) or {}
     order = data.get("ids") or []
+    media_type = data.get("type") or ""
+
+    allowed = {
+        "image": ("media.move", "announcements.move"),
+        "video": ("media.move",),
+        "audio": ("media.move",),
+        "auto_slide": ("auto_slides.move",),
+    }
+    user = get_current_user()
+    if user is None:
+        abort(401)
+    required = allowed.get(media_type, ())
+    if not required or not any(has_permission(user, perm) for perm in required):
+        abort(403)
+
     for position, media_id in enumerate(order, start=1):
         media = db.session.get(Media, int(media_id))
         if media is not None:

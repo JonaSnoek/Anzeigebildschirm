@@ -6,10 +6,15 @@
 <div id="media-page">
   <div class="row-btns">
     <h1 style="margin: 0;">Medienverwaltung</h1>
+    {% if can("announcements.create") %}
     <a href="{{ url_for('announcements.editor_new') }}" class="btn btn-primary" style="margin-left: auto;">+ Ankündigungsbild erstellen</a>
+    {% endif %}
+    {% if can("auto_slides.create") %}
     <a href="{{ url_for('announcements.auto_slide_new') }}" class="btn btn-primary">+ Auto-Slide erstellen</a>
+    {% endif %}
   </div>
 
+  {% if can("media.create") %}
   <div class="card">
     <h2>Datei hochladen</h2>
     <p class="hint">
@@ -26,12 +31,19 @@
       <span id="upload-status" class="status"></span>
     </form>
   </div>
+  {% endif %}
 
   <div class="tabs">
+    {% if can("media.view") or can("announcements.view") %}
     <button class="tab active" data-type="image">Bilder (<span data-count="image">0</span>)</button>
+    {% endif %}
+    {% if can("media.view") %}
     <button class="tab" data-type="video">Videos (<span data-count="video">0</span>)</button>
     <button class="tab" data-type="audio">Audio (<span data-count="audio">0</span>)</button>
+    {% endif %}
+    {% if can("auto_slides.view") %}
     <button class="tab" data-type="auto_slide">Auto-Slides (<span data-count="auto_slide">0</span>)</button>
+    {% endif %}
   </div>
 
   <div id="media-grid" class="media-grid"></div>

@@ -67,6 +67,10 @@ function toast(message, type) {
   setTimeout(() => { el.classList.remove("show"); setTimeout(() => el.remove(), 300); }, 3500);
 }
 
+/* Rechteprüfung im Frontend (Rechte-Liste aus base.html: window.__PERMS).
+   Versteckt nur Buttons – die Server-Seite prüft jede Aktion zusätzlich. */
+const can = (perm) => window.__PERMS.indexOf(perm) >= 0;
+
 /* ---------- Seitenleiste ein-/ausklappen (wird gemerkt) ---------- */
 const sidebarToggle = document.getElementById("sidebar-toggle");
 const appLayout = document.querySelector(".layout");
@@ -117,6 +121,23 @@ if (mediaPage) {
   let currentType = "image";
   let items = [];
 
+  /* Recht „Verschieben/Reihenfolge“ je Tab – muss zur Server-Prüfung passen. */
+  const MOVE_PERMS = {
+    image: ["media.move", "announcements.move"],
+    video: ["media.move"],
+    audio: ["media.move"],
+    auto_slide: ["auto_slides.move"],
+  };
+  function canMove() {
+    const p = MOVE_PERMS[currentType] || [];
+    return p.some(can);
+  }
+  function categoryOf(m) {
+    if (m.type === "auto_slide") return "auto_slides";
+    if (m.project_file) return "announcements";
+    return "media";
+  }
+
   const ACCEPT = {
     image: ".jpg,.jpeg,.png,.gif,.webp",
     video: ".mp4,.webm",
@@ -165,11 +186,20 @@ if (mediaPage) {
       grid.innerHTML = '<div class="empty">Keine Dateien in dieser Kategorie.</div>';
       return;
     }
+    const movable = canMove();
     grid.innerHTML = items.map((m, i) => {
       const first = i > 0;
       const last = i < items.length - 1;
+      const cat = categoryOf(m);
+      const toggleable = can(cat + ".toggle");
+      const editable = m.project_file && can(cat + ".edit");
+      const hasMore = (movable && (first || last))
+        || can(cat + ".copy")
+        || can(cat + ".edit")
+        || (m.type !== "auto_slide" && can(cat + ".replace"))
+        || can(cat + ".delete");
       return `
-      <div class="media-card ${m.active === false ? "inactive" : ""}" draggable="true" data-id="${m.id}">
+      <div class="media-card ${m.active === false ? "inactive" : ""}" draggable="${movable}" data-id="${m.id}">
         <div class="thumb">${thumb(m)}</div>
         <div class="media-card-body">
           <div class="name" title="${esc(m.name)}">${esc(m.name)}</div>
@@ -177,27 +207,25 @@ if (mediaPage) {
         </div>
         <div class="media-card-actions">
           <div class="media-actions-row">
-            <div class="media-toggle" title="Im Anzeigebildschirm zeigen">
+            ${toggleable ? `<div class="media-toggle" title="Im Anzeigebildschirm zeigen">
               <label class="switch">
                 <input type="checkbox" data-action="toggle-active" ${m.active === false ? "" : "checked"}>
                 <span></span>
               </label>
               <span class="${m.active === false ? "off" : "on"}">${m.active === false ? "Aus" : "An"}</span>
-            </div>
+            </div>` : ""}
             ${actionButton("preview", "Vorschau", SVG.eye)}
-            ${m.project_file
-              ? actionButton("edit", m.type === "auto_slide" ? "Auto-Slide bearbeiten" : "Ankündigungsbild bearbeiten", SVG.edit)
-              : ""}
-            ${actionButton("more", "Weitere Aktionen", SVG.more)}
+            ${editable ? actionButton("edit", m.type === "auto_slide" ? "Auto-Slide bearbeiten" : "Ankündigungsbild bearbeiten", SVG.edit) : ""}
+            ${hasMore ? actionButton("more", "Weitere Aktionen", SVG.more) : ""}
           </div>
-          <div class="media-more-menu">
-            <button class="media-more-item" data-action="up" ${first ? "" : "disabled"} title="Nach oben verschieben">${SVG.up}Nach oben</button>
-            <button class="media-more-item" data-action="down" ${last ? "" : "disabled"} title="Nach unten verschieben">${SVG.down}Nach unten</button>
-            <button class="media-more-item" data-action="duplicate" title="Duplizieren">${SVG.duplicate}Duplizieren</button>
-            <button class="media-more-item" data-action="rename" title="Umbenennen">${SVG.rename}Umbenennen</button>
-            ${m.type === "auto_slide" ? "" : `<button class="media-more-item" data-action="replace" title="Ersetzen">${SVG.replace}Ersetzen</button>`}
-            <button class="media-more-item media-more-danger" data-action="delete" title="Löschen">${SVG.delete}Löschen</button>
-          </div>
+          ${hasMore ? `<div class="media-more-menu">
+            ${movable && first ? `<button class="media-more-item" data-action="up" title="Nach oben verschieben">${SVG.up}Nach oben</button>` : ""}
+            ${movable && last ? `<button class="media-more-item" data-action="down" title="Nach unten verschieben">${SVG.down}Nach unten</button>` : ""}
+            ${can(cat + ".copy") ? `<button class="media-more-item" data-action="duplicate" title="Duplizieren">${SVG.duplicate}Duplizieren</button>` : ""}
+            ${can(cat + ".edit") ? `<button class="media-more-item" data-action="rename" title="Umbenennen">${SVG.rename}Umbenennen</button>` : ""}
+            ${m.type === "auto_slide" ? "" : can(cat + ".replace") ? `<button class="media-more-item" data-action="replace" title="Ersetzen">${SVG.replace}Ersetzen</button>` : ""}
+            ${can(cat + ".delete") ? `<button class="media-more-item media-more-danger" data-action="delete" title="Löschen">${SVG.delete}Löschen</button>` : ""}
+          </div>` : ""}
         </div>
       </div>`;
     }).join("");
@@ -213,7 +241,7 @@ if (mediaPage) {
   function saveOrder() {
     api("/api/media/reorder", {
       method: "POST",
-      body: { ids: items.map((x) => x.id) },
+      body: { type: currentType, ids: items.map((x) => x.id) },
     }).catch((err) => toast(err.message, "error"));
   }
 
@@ -223,7 +251,7 @@ if (mediaPage) {
 
     grid.addEventListener("dragstart", (e) => {
       const card = e.target.closest(".media-card");
-      if (!card) return;
+      if (!card || !canMove()) { e.preventDefault(); return; }
       draggedId = card.dataset.id;
       card.classList.add("dragging");
     });
@@ -334,6 +362,9 @@ if (mediaPage) {
     });
   }
 
+  const activeTab = tabs.find((t) => t.classList.contains("active"));
+  if (activeTab) currentType = activeTab.dataset.type;
+
   tabs.forEach((tab) => {
     tab.addEventListener("click", async () => {
       tabs.forEach((t) => t.classList.remove("active"));
@@ -344,6 +375,7 @@ if (mediaPage) {
     });
   });
 
+  if (uploadForm) {
   uploadForm.addEventListener("submit", async (e) => {
     e.preventDefault();
     const files = Array.from(uploadInput.files || []);
@@ -365,6 +397,7 @@ if (mediaPage) {
       uploadStatus.classList.add("error");
     }
   });
+  }
 
   bindGrid();
   loadList().catch((err) => toast(err.message, "error"));
@@ -376,6 +409,18 @@ if (mediaPage) {
   const settingsForm = document.getElementById("settings-form");
 if (settingsForm) {
   const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
+
+  /* Abschnitte ohne Berechtigung sperren (Rechte je Section per data-perm).
+     Gesperrte Felder werden beim Speichern automatisch nicht übermittelt. */
+  const canSetEdit = can("settings.edit");
+  const canSetWidgets = can("settings.widgets");
+  const canSetWeather = can("settings.weather");
+  document.querySelectorAll("fieldset[data-perm]").forEach((fs) => {
+    if (!can(fs.dataset.perm)) {
+      fs.disabled = true;
+      fs.classList.add("locked");
+    }
+  });
 
   const volumeRange = settingsForm.volume;
   const volumeValue = document.getElementById("volume-value");
@@ -414,32 +459,36 @@ if (settingsForm) {
       toast("Bitte eine gültige Zahl für das benutzerdefinierte Folien-Intervall eingeben (1–999).", "error");
       return;
     }
-    const body = {
-      slide_duration: parseInt(settingsForm.slide_duration.value, 10),
-      transition: settingsForm.transition.value,
-      autoplay: settingsForm.autoplay.checked,
-      loop: settingsForm.loop.checked,
-      volume: parseInt(volumeRange.value, 10),
-      music_enabled: settingsForm.music_enabled.checked,
+    const body = {};
+    if (canSetEdit) {
+      body.slide_duration = parseInt(settingsForm.slide_duration.value, 10);
+      body.transition = settingsForm.transition.value;
+      body.autoplay = settingsForm.autoplay.checked;
+      body.loop = settingsForm.loop.checked;
+      body.volume = parseInt(volumeRange.value, 10);
+      body.music_enabled = settingsForm.music_enabled.checked;
+    }
+    if (canSetWidgets) {
+      body.clock_enabled = settingsForm.clock_enabled.checked;
+      body.clock_mode = settingsForm.clock_mode.value;
+      body.clock_x = parseInt(settingsForm.clock_x.value, 10);
+      body.clock_y = parseInt(settingsForm.clock_y.value, 10);
+      body.clock_size_pct = parseInt(settingsForm.clock_size_pct.value, 10);
+      body.clock_big_size_pct = parseInt(settingsForm.clock_big_size_pct.value, 10);
+      body.clock_interval = clockInterval;
 
-      clock_enabled: settingsForm.clock_enabled.checked,
-      clock_mode: settingsForm.clock_mode.value,
-      clock_x: parseInt(settingsForm.clock_x.value, 10),
-      clock_y: parseInt(settingsForm.clock_y.value, 10),
-      clock_size_pct: parseInt(settingsForm.clock_size_pct.value, 10),
-      clock_big_size_pct: parseInt(settingsForm.clock_big_size_pct.value, 10),
-      clock_interval: clockInterval,
-
-      weather_enabled: settingsForm.weather_enabled.checked,
-      weather_display: settingsForm.weather_display.value,
-      weather_city: settingsForm.weather_city.value.trim(),
-      weather_mode: settingsForm.weather_mode.value,
-      weather_x: parseInt(settingsForm.weather_x.value, 10),
-      weather_y: parseInt(settingsForm.weather_y.value, 10),
-      weather_size_pct: parseInt(settingsForm.weather_size_pct.value, 10),
-      weather_big_size_pct: parseInt(settingsForm.weather_big_size_pct.value, 10),
-      weather_interval: weatherInterval,
-    };
+      body.weather_enabled = settingsForm.weather_enabled.checked;
+      body.weather_display = settingsForm.weather_display.value;
+      body.weather_mode = settingsForm.weather_mode.value;
+      body.weather_x = parseInt(settingsForm.weather_x.value, 10);
+      body.weather_y = parseInt(settingsForm.weather_y.value, 10);
+      body.weather_size_pct = parseInt(settingsForm.weather_size_pct.value, 10);
+      body.weather_big_size_pct = parseInt(settingsForm.weather_big_size_pct.value, 10);
+      body.weather_interval = weatherInterval;
+    }
+    if (canSetWeather) {
+      body.weather_city = settingsForm.weather_city.value.trim();
+    }
     try {
       await api("/api/settings", { method: "POST", body });
       toast("Änderungen erfolgreich gespeichert.", "ok");
@@ -1010,12 +1059,33 @@ if (usersPage) {
   const createForm = document.getElementById("user-create-form");
   const createStatus = document.getElementById("user-create-status");
 
+  const permsModal = document.getElementById("perms-modal");
+  const permsList = document.getElementById("perms-list");
+  const permsSave = document.getElementById("perms-save");
+  const permsStatus = document.getElementById("perms-status");
+  const permsUserName = document.getElementById("perms-user-name");
+  const permsUserRole = document.getElementById("perms-user-role");
+  const permsNote = document.getElementById("perms-note");
+
+  const CATALOG = window.__PERM_CATALOG || [];
+  const ROLE_TEMPLATES = window.__ROLE_TEMPLATES || {};
+  const ALL_RIGHTS = [];
+  CATALOG.forEach((cat) => cat.rights.forEach(([key]) => ALL_RIGHTS.push(key)));
+
+  let permsTarget = null;
+  let permsChecks = [];
+
+  const currentUserId = window.__CURRENT_USER_ID;
+
   async function loadUsers() {
     const data = await api("/api/users");
     renderUsers(data.items || []);
   }
 
   function roleSelect(u) {
+    if (!can("users.edit")) {
+      return `<span class="role-badge">${esc(u.role)}</span>`;
+    }
     const opts = ["admin", "editor", "viewer"].map((r) =>
       `<option value="${r}" ${u.role === r ? "selected" : ""}>${r}</option>`
     ).join("");
@@ -1027,22 +1097,33 @@ if (usersPage) {
       tableBody.innerHTML = '<tr><td colspan="5" class="empty">Keine Benutzer vorhanden.</td></tr>';
       return;
     }
-    tableBody.innerHTML = users.map((u) => `
+    tableBody.innerHTML = users.map((u) => {
+      const actions = [];
+      if (can("users.permissions")) {
+        actions.push(`<button class="btn btn-small" data-user="${u.id}" data-action="permissions">Berechtigungen</button>`);
+      }
+      if (can("users.edit")) {
+        actions.push(`<button class="btn btn-small" data-user="${u.id}" data-action="password">Passwort</button>`);
+      }
+      if (can("users.delete")) {
+        actions.push(`<button class="btn btn-small btn-danger" data-user="${u.id}" data-action="delete">Löschen</button>`);
+      }
+      return `
       <tr>
-        <td>${esc(u.username)}</td>
+        <td>${esc(u.username)}${u.id === currentUserId ? ' <span class="role-badge">du</span>' : ""}</td>
         <td>${roleSelect(u)}</td>
         <td>
-          <label class="switch">
-            <input type="checkbox" data-user="${u.id}" ${u.active ? "checked" : ""}>
-            <span></span>
-          </label>
+          ${can("users.deactivate")
+            ? `<label class="switch">
+                <input type="checkbox" data-user="${u.id}" ${u.active ? "checked" : ""}>
+                <span></span>
+              </label>`
+            : (u.active ? "Aktiv" : "Inaktiv")}
         </td>
         <td>${fmtDate(u.created_at)}</td>
-        <td>
-          <button class="btn btn-small" data-user="${u.id}" data-action="password">Passwort</button>
-          <button class="btn btn-small btn-danger" data-user="${u.id}" data-action="delete">Löschen</button>
-        </td>
-      </tr>`).join("");
+        <td class="actions-cell">${actions.join("")}</td>
+      </tr>`;
+    }).join("");
   }
 
   tableBody.addEventListener("change", async (e) => {
@@ -1066,7 +1147,7 @@ if (usersPage) {
   tableBody.addEventListener("click", async (e) => {
     const btn = e.target.closest("[data-action]");
     if (!btn) return;
-    const id = btn.dataset.user;
+    const id = Number(btn.dataset.user);
     try {
       if (btn.dataset.action === "password") {
         const pw = prompt("Neues Passwort (mindestens 6 Zeichen):");
@@ -1078,6 +1159,10 @@ if (usersPage) {
         if (!confirm("Benutzer wirklich löschen?")) return;
         await api(`/api/users/${id}/delete`, { method: "POST" });
         toast("Benutzer gelöscht.", "ok");
+      } else if (btn.dataset.action === "permissions") {
+        const data = await api("/api/users");
+        const target = (data.items || []).find((x) => x.id === id);
+        if (target) openPermsModal(target);
       }
     } catch (err) {
       toast(err.message, "error");
@@ -1085,24 +1170,119 @@ if (usersPage) {
     loadUsers();
   });
 
-  createForm.addEventListener("submit", async (e) => {
-    e.preventDefault();
-    const body = {
-      username: createForm.username.value.trim(),
-      password: createForm.password.value,
-      role: createForm.role.value,
-    };
+  /* ---------- Berechtigungs-Modal ---------- */
+
+  function effectivePerms(u) {
+    const base = ROLE_TEMPLATES[u.role] || [];
+    const set = new Set(base);
+    const overrides = u.permissions || {};
+    Object.keys(overrides).forEach((key) => {
+      if (overrides[key]) set.add(key); else set.delete(key);
+    });
+    return set;
+  }
+
+  function openPermsModal(u) {
+    permsTarget = u;
+    permsUserName.textContent = u.username;
+    permsUserRole.textContent = u.role;
+    permsStatus.textContent = "";
+    permsStatus.classList.remove("error");
+    const eff = effectivePerms(u);
+    const locked = u.role === "admin" || u.id === currentUserId;
+    permsChecks = [];
+
+    permsList.innerHTML = CATALOG.map((cat) => {
+      const rights = cat.rights.map(([key, label]) => {
+        const checked = eff.has(key);
+        return `<label class="perm-right">
+          <input type="checkbox" value="${key}" ${checked ? "checked" : ""} ${locked ? "disabled" : ""}>
+          <span>${label}</span>
+        </label>`;
+      }).join("");
+      return `<div class="perm-category">
+        <div class="perm-cat-head">
+          <strong>${cat.label}</strong>
+          <span class="perm-cat-btns">
+            <button type="button" class="btn-link" data-cat-select>Alle auswählen</button>
+            <button type="button" class="btn-link" data-cat-clear>Keine auswählen</button>
+          </span>
+        </div>
+        <div class="perm-rights">${rights}</div>
+      </div>`;
+    }).join("");
+
+    permsList.querySelectorAll("input[type=checkbox]").forEach((input) => permsChecks.push(input));
+
+    if (u.role === "admin") {
+      permsNote.textContent = "Administratoren haben immer vollen Zugriff – einzelne Rechte sind nicht änderbar.";
+    } else if (u.id === currentUserId) {
+      permsNote.textContent = "Deine eigenen Berechtigungen kannst du nicht ändern.";
+    } else {
+      permsNote.textContent = `Rolle „${u.role}“ als Vorlage; darunter Rechte einzeln aktivieren oder deaktivieren.`;
+    }
+    permsModal.classList.remove("hidden");
+  }
+
+  function closePermsModal() {
+    permsModal.classList.add("hidden");
+    permsTarget = null;
+  }
+
+  permsList.addEventListener("click", (e) => {
+    const btn = e.target.closest("[data-cat-select], [data-cat-clear]");
+    if (!btn) return;
+    const rights = btn.closest(".perm-category").querySelectorAll('input[type="checkbox"]');
+    const on = btn.hasAttribute("data-cat-select");
+    rights.forEach((input) => { if (!input.disabled) input.checked = on; });
+  });
+
+  permsSave.addEventListener("click", async () => {
+    const want = new Set(permsChecks.filter((c) => c.checked).map((c) => c.value));
+    const base = new Set(ROLE_TEMPLATES[permsTarget.role] || []);
+    const overrides = {};
+    ALL_RIGHTS.forEach((key) => {
+      const defaultOn = base.has(key);
+      if (defaultOn !== want.has(key)) overrides[key] = want.has(key);
+    });
     try {
-      await api("/api/users", { method: "POST", body });
-      createStatus.classList.remove("error");
-      createStatus.textContent = "Benutzer angelegt.";
-      createForm.reset();
+      await api(`/api/users/${permsTarget.id}/permissions`, { method: "POST", body: { permissions: overrides } });
+      permsStatus.classList.remove("error");
+      permsStatus.textContent = "Gespeichert.";
+      toast("Berechtigungen gespeichert.", "ok");
+      closePermsModal();
       loadUsers();
     } catch (err) {
-      createStatus.textContent = err.message;
-      createStatus.classList.add("error");
+      permsStatus.textContent = err.message;
+      permsStatus.classList.add("error");
     }
   });
+
+  permsModal.querySelector(".modal-close").addEventListener("click", closePermsModal);
+  permsModal.addEventListener("click", (e) => {
+    if (e.target === permsModal) closePermsModal();
+  });
+
+  if (createForm) {
+    createForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const body = {
+        username: createForm.username.value.trim(),
+        password: createForm.password.value,
+        role: createForm.role.value,
+      };
+      try {
+        await api("/api/users", { method: "POST", body });
+        createStatus.classList.remove("error");
+        createStatus.textContent = "Benutzer angelegt.";
+        createForm.reset();
+        loadUsers();
+      } catch (err) {
+        createStatus.textContent = err.message;
+        createStatus.classList.add("error");
+      }
+    });
+  }
 
   loadUsers().catch((err) => toast(err.message, "error"));
 }

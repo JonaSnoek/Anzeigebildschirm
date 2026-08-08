@@ -13,6 +13,7 @@ from flask import abort, redirect, request, session, url_for
 
 from .database import db
 from .models import User
+from .permissions import has_any_permission
 
 # --------------------------------------------------------------------------
 # CSRF-Schutz
@@ -90,6 +91,27 @@ def roles_required(*roles: str):
                     abort(401)
                 return redirect(url_for("auth.login", next=request.path))
             if user.role not in roles:
+                abort(403)
+            return fn(*args, **kwargs)
+        return wrapper
+    return decorator
+
+
+def permission_required(*perms: str):
+    """Erfordert einen Login mit mindestens einem der angegebenen Rechte.
+
+    Prüft die individuellen Berechtigungen des Benutzers (Rolle + Overrides).
+    Administratoren besitzen automatisch alle Rechte.
+    """
+    def decorator(fn):
+        @wraps(fn)
+        def wrapper(*args, **kwargs):
+            user = get_current_user()
+            if user is None:
+                if request.path.startswith("/api/"):
+                    abort(401)
+                return redirect(url_for("auth.login", next=request.path))
+            if not has_any_permission(user, *perms):
                 abort(403)
             return fn(*args, **kwargs)
         return wrapper

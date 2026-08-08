@@ -900,3 +900,107 @@ input[type="range"].slider::-moz-range-track { background: transparent; }
   .sidebar-footer .link-btn::after { font-size: 1rem; }
   .status { display: block; margin: .5rem 0 0; }
 }
+
+/* ---------- Berechtigungs-Sperre: Einstellungen-Abschnitte ---------- */
+fieldset.settings-section {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+
+fieldset.settings-section.locked {
+  opacity: .55;
+}
+
+/* ---------- Benutzerverwaltung ---------- */
+.role-badge {
+  display: inline-block;
+  background: rgba(148, 163, 184, .16);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: .1rem .6rem;
+  font-size: .8rem;
+  color: var(--muted);
+}
+
+.actions-cell { white-space: nowrap; }
+.actions-cell .btn + .btn { margin-left: .4rem; }
+
+/* ---------- Berechtigungs-Modal ---------- */
+.perms-modal {
+  max-width: 640px;
+  max-height: 86vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.perms-modal h2 { margin: 0 2rem .5rem 0; }
+
+.perms-modal .modal-close { top: .9rem; right: 1.1rem; }
+
+#perms-list {
+  overflow-y: auto;
+  padding-right: .4rem;
+  margin: .6rem 0;
+}
+
+.perm-category {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin-bottom: .8rem;
+  overflow: hidden;
+}
+
+.perm-cat-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .6rem;
+  padding: .55rem .9rem;
+  background: rgba(148, 163, 184, .08);
+  border-bottom: 1px solid var(--border);
+}
+
+.perm-cat-head strong { font-size: .92rem; }
+
+.perm-cat-btns { display: flex; gap: .3rem; }
+
+.btn-link {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--accent, #5b8cff);
+  font-size: .82rem;
+  cursor: pointer;
+}
+
+.btn-link:hover { text-decoration: underline; }
+
+.perm-rights {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: .15rem .6rem;
+  padding: .55rem .9rem;
+}
+
+.perm-right {
+  display: flex;
+  align-items: center;
+  gap: .45rem;
+  font-size: .86rem;
+  color: var(--text);
+  padding: .18rem 0;
+  cursor: pointer;
+}
+
+.perm-right input[type="checkbox"] {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--accent, #2f5cff);
+  flex-shrink: 0;
+}
+
+.perm-right input:disabled { opacity: .5; }
+
+.perm-right input:disabled + span { color: var(--muted); }

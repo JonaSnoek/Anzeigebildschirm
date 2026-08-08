@@ -19,6 +19,7 @@
       <form id="settings-form">
       <div class="card">
         <h2>Diashow &amp; Ton</h2>
+        <fieldset class="settings-section" data-perm="settings.edit">
           <div class="field">
             <label for="slide_duration">Anzeigedauer pro Bild (Sekunden)</label>
             <input type="number" id="slide_duration" name="slide_duration" min="3" max="300" value="{{ settings.slide_duration }}">
@@ -52,10 +53,12 @@
             <input type="checkbox" id="music_enabled" name="music_enabled" {{ 'checked' if settings.music_enabled == 'true' }}>
             <label for="music_enabled">Hintergrundmusik abspielen</label>
           </div>
+        </fieldset>
       </div>
 
       <div class="card">
         <h2>Widgets</h2>
+        <fieldset class="settings-section" data-perm="settings.widgets">
 
         <!-- ==================== UHR ==================== -->
         <section class="widget-config" data-widget="clock">
@@ -143,11 +146,13 @@
           </div>
 
           <div class="widget-body">
+            <fieldset class="settings-section" data-perm="settings.weather">
             <div class="field">
               <label for="weather_city">Ort</label>
               <input type="text" id="weather_city" name="weather_city" maxlength="120" placeholder="z. B. Berlin" value="{{ settings.weather_city }}">
               <div class="hint">Wetterdaten werden automatisch über Open-Meteo abgerufen.</div>
             </div>
+            </fieldset>
 
             <div class="field">
               <label>Darstellung</label>
@@ -211,15 +216,19 @@
             <input type="hidden" id="weather_y" name="weather_y" value="{{ settings.weather_y }}">
           </div>
         </section>
+        </fieldset>
       </div>
 
+      {% if can("settings.edit") or can("settings.widgets") or can("settings.weather") %}
       <div class="row-btns save-bar">
         <button type="submit" class="btn btn-primary btn-lg">Einstellungen speichern</button>
       </div>
+      {% endif %}
       </form>
 
       <div class="card" id="weather-data-card">
         <h2>Wetter bearbeiten</h2>
+        <fieldset class="settings-section" data-perm="settings.weather">
         <p class="hint">
           Für jeden Tag Wetterzustand sowie Höchst- und Mindesttemperatur
           wählen – die passenden Symbole werden automatisch angezeigt. Die
@@ -286,6 +295,7 @@
           <button type="submit" class="btn btn-primary">Wetter speichern</button>
           <span id="weather-manual-status" class="status"></span>
         </form>
+        </fieldset>
       </div>
     </div>
 

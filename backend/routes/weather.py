@@ -5,7 +5,7 @@ Funktionen zum Aktualisieren und manuellen Pflegen der Werte.
 
 from flask import Blueprint, jsonify, request
 
-from ..security import roles_required
+from ..security import permission_required
 from ..services.settings import get_all_settings
 from ..services import weather
 
@@ -29,7 +29,7 @@ def public_weather():
 
 
 @bp.post("/api/weather/refresh")
-@roles_required("admin", "editor")
+@permission_required("settings.weather")
 def refresh_weather():
     """Holt frische Wetterdaten von Open-Meteo (überschreibt gecachte Werte)."""
     settings = get_all_settings()
@@ -47,7 +47,7 @@ def refresh_weather():
 
 
 @bp.post("/api/weather")
-@roles_required("admin", "editor")
+@permission_required("settings.weather")
 def save_weather():
     """Speichert manuell gepflegte Wetterdaten (falls kein Internet verfügbar ist)."""
     data = request.get_json(silent=True) or {}
